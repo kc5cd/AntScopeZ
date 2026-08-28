@@ -1,0 +1,433 @@
+---
+layout: default
+title: Changelog
+---
+
+# Changelog
+
+All notable changes to this project are documented here. Format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the version number
+below should track `project(VERSION ...)` in `CMakeLists.txt`.
+
+## [Unreleased]
+
+## [2.2.2] - 2026-08-28
+
+### Added
+
+- Measurements table: Points column now tags each row "(s1p)"/"(s2p)" so
+  1-port vs. 2-port measurements are distinguishable at a glance.
+- Export dialog: shows the selected measurement's name/points/type, and
+  offers new S2P RI/MA/DB Touchstone exports -- real S11/S21/S12/S22,
+  only shown for a measurement that actually has 2-port data. The
+  existing 1-port S-parameter export also gains a matching S,DB option
+  (previously RI/MA only, same as S2P).
+- Tools > Marker Comparison: compare two markers' frequency/SWR/return
+  loss/R/X, estimated Q and equivalent L/C off the Current marker, and
+  estimate how much to trim (or add) to a simple 1/4-wave vertical,
+  1/2-wave dipole or full-wave antenna to move resonance from one marker
+  to the other.
+- Settings > Markers: "Automatically set a marker at the lowest SWR" (Marker
+  behavior group, on by default) places a marker at the swept trace's
+  lowest-SWR point right after a single/full scan finishes -- never during
+  a Continuous scan, and only if a marker slot is free.
+- Tools > TDR Measurement: one dialog for both setting up and reading a
+  TDR scan (replaces the standalone Single-button-on-the-TDR-tab trigger
+  and the separate Tools > TDR Analysis dialog, both retired). Scan
+  setup: cable type/velocity factor (genuinely drives that scan's own
+  distance calculation, but only for that one scan -- doesn't touch
+  Settings > Cable unless applied explicitly, see below), top frequency,
+  points, a live unambiguous-range/resolution estimate shown before
+  scanning, and a window-function picker (Rectangular/Hamming/Hann/
+  Blackman/Kaiser, Hamming default) that re-plots an already-captured
+  scan live with no rescan needed. Result (after scanning): distance to
+  the strongest reflection, open/short with an approximate impedance in
+  Ohms (a rough estimate, not a precision figure), an automatic note when
+  a peak falls short of an entered known cable length (possible fault
+  partway along vs. just the far end), and a reverse calculator that
+  solves for velocity factor given a known physical cable length. "Use
+  this velocity factor" copies the solved value into Scan setup's
+  velocity factor field and applies it to Settings > Cable as Custom
+  (resetting R0/loss to the "Ideal 50-Ohm cable" convention -- 50 Ohm, no
+  loss -- instead of leaving whatever a previously-selected Preset's real
+  figures were showing), refreshing the TDR chart's distance axis
+  immediately. If Settings > Cable happens to already be open, it updates
+  live instead of only taking effect the next time the dialog is opened.
+  No Continuous mode -- TDR is one scan at a time.
+- Settings > Cable: new Preset/Custom toggle. Preset locks velocity
+  factor/R0/conductive+dielectric loss/loss units/frequency to whatever
+  cableComboBox has selected (so the displayed numbers can never silently
+  disagree with the cable name shown); Custom disables the combo and
+  hand-edits those fields instead, same as before this existed. Locked
+  fields get their own deliberate "read-only" styling (full-contrast text,
+  flattened into the dialog background) instead of Qt's normal disabled
+  dimming, so they read as "showing a fixed value" rather than "broken".
+  This is now the *only* thing that ever disables those fields -- see the
+  cableActionEnableButtons() removal below.
+- Measurements table: new "Points" column shows the actual number of
+  points received for each scan ("--" until it finishes) -- a device
+  silently returning fewer points than requested is now visible at a
+  glance instead of requiring a debug-log read.
+- Settings > General: new "Scanning" group -- "Scanning points maximum"
+  sets the Points field/slider's real practical ceiling (50-10000,
+  replacing what used to be a fixed, recompile-only limit); "Warn for
+  scans above" pops a Cancel-able confirmation before starting a scan that
+  requests more points than this; "Analyzer maximum number of points"
+  caps how many points a single sweep actually sends to the device --
+  requesting more than that transparently splits the scan into several
+  sequential sweeps ("stitching") and concatenates the results into one
+  continuous dataset. Default 1000/1000/1000 -- the first two match prior
+  behavior exactly, but a scan above 1000 points now stitches by default
+  rather than needing to be turned on. Applies to Single/Continuous/User
+  scans; TDR, Calibration, and S21 are unaffected for now.
+
+- Settings > General: "Allow extended chart zoom" checkbox (off by
+  default) lets Ctrl+scroll/Ctrl+`+`/`-` zoom the SWR, Z=R+jX, Z=R‖jX,
+  and RL charts' Y-axis past their normal preset floor/ceiling.
+- One Fq mode's floating readout gains a second style: double-click it
+  (or its alternate) to swap between the original packed 11-field
+  technical view and a new plain, resizable dialog showing just SWR as
+  one giant bold number ("x.xx:1") with a small "SWR" caption, auto-sized
+  to fill on resize -- a glanceable tuning aid readable from across a
+  yard. Both styles stay live-updated the whole session regardless of
+  which is shown, so toggling never displays a stale value. The chosen
+  style is remembered across restarts and tracks the main window's
+  minimize/restore state.
+
+### Changed
+
+- Settings > General: "Register application" button and the "Match
+  license" groupbox (Register device/Update license/Device info) moved to
+  the Updates tab -- they're update/registration-related, not general
+  settings. No behavior change, just relocated.
+- Settings > General: removed the "Connect analyzer" button (redundant
+  with the main window's own Connect Analyzer entry points) and "Open
+  'Connect Analyzer' on launch" checkbox (moved to the Connect Analyzer
+  dialog itself, next to "Use same selection for future connections" --
+  both are about that dialog's own behavior, not general app settings;
+  same underlying setting/ini key, so an existing choice carries over
+  unchanged).
+- Settings > Cable's locked (Preset) fields now show dimmed text instead
+  of full-contrast -- the intent was always "flatten into the background
+  to read as locked", but keeping full-contrast text while an actually-
+  editable field only gets a mild fill tint made locked fields look more
+  prominent than editable ones, backwards from what "locked" vs.
+  "editable" should communicate. Plain muted text undershot the other
+  way (tuned for disabled hint text where illegibility is fine, not a
+  value the user still needs to read) and came out too close to its own
+  background, so this is a blend 70% back toward full-contrast text
+  instead of the theme's muted color as-is.
+- Settings dialog's minimum size is now computed from its own layout
+  (every tab's real minimum) instead of a hand-picked 550x320 that
+  predated several tabs growing past it -- dragging the dialog down to
+  its old stated minimum could squash controls unreadable instead of
+  actually stopping there.
+- Settings > Cable tab reordered to match how it's actually used and how
+  the fields are actually consumed by calcFarEnd() (measurements_farend.cpp):
+  cable type picker first; velocity factor/R0 joined the former "Cable
+  loss" groupbox (renamed "Cable specifications") alongside
+  conductive/dielectric loss/units/frequency -- all seven lock together
+  under Preset. Cable length moved into "Transmission line options"
+  instead (R0/loss/length all only affect anything once Subtract or Add
+  cable is selected, but length isn't a property *of* the cable the way
+  the other six are, so it stays always-editable regardless of
+  Preset/Custom) and now shows its own ft/m unit label that follows the
+  app's Metric/Imperial setting, converting the displayed number rather
+  than just relabeling it -- previously always feet with no indication of
+  that. Transmission line options' three buttons are stacked vertically
+  with a plain-English explanation next to each (Do nothing/Subtract
+  cable/Add cable). Export/Update graphs left as-is.
+- Removed Settings::cableActionEnableButtons() -- a second, older mechanism
+  that also disabled cableR0/cableLossComboBox/cableLen/conductiveLoss/
+  dielectricLoss/atFq/anyFq whenever Transmission line options was set to
+  Do nothing (vs. Subtract/Add), fighting the new Preset/Custom lock for
+  control of the same widgets. Editability is now solely a Preset/Custom
+  question ("can I change this"), never a Do-nothing/Subtract/Add one
+  ("does this currently matter") -- those turned out to be different
+  questions that don't need the same answer.
+- Consolidated all theme-driven styling into one `Style::globalStyleSheet()`
+  applied to the whole app from exactly two places (startup, theme change)
+  instead of ~150 scattered per-dialog `setStyleSheet()` calls that could
+  silently go stale while a dialog was open across a theme switch. No
+  behavior change for a theme picked before opening a dialog; open dialogs
+  now restyle live instead of only on next open.
+
+### Fixed
+
+- 2-port Touchstone import: a `Z, RI` 2-port file no longer gets its
+  Z21/Z12/Z22 columns silently mislabeled as S21/S12/S22 (different
+  physical quantity, not converted) -- now just skipped, same as before
+  2-port import existed, rather than shown as wrong data.
+- Settings > General's Data Folder "Browse..." button opened a plain file
+  picker (Open/Cancel, files selectable, clicking a folder navigated into
+  it instead of choosing it) rather than a proper directory chooser --
+  FileDialog::getExistingDirectory() never actually set FileMode::Directory
+  despite its name. Also folded in ShowDirsOnly/DontUseNativeDialog via
+  the same setOptions() call that sets it now, since setOptions() replaces
+  the whole flags set rather than merging with prior setOption() calls --
+  DontUseNativeDialog was silently getting wiped out by it too.
+- Settings > Cable's Export button crashed with no measurement data yet --
+  it always passed size()-1 (-1, wrapping to 4294967295 through a quint32
+  parameter) as the measurement index to export, an out-of-bounds access
+  as soon as Export needed a suggested filename. Now shows a "run a scan
+  first" notification instead of opening Export at all in that case.
+- m_settingsDialog could go dangling if Settings was closed via the native
+  window decoration/Alt+F4 instead of its own Close button -- only that
+  button's handler ever nulled the pointer; WA_DeleteOnClose's deferred
+  deletion from any other close path left it pointing at a freed object.
+  Added the same destroyed()-nulls-the-pointer safety net the newer
+  Marker Comparison/TDR Analysis dialogs already had.
+- Opening Settings (or pressing Esc) while no scan was running dropped a
+  spurious second "lowest SWR" auto-marker on top of the real one --
+  both send a blanket "stop measuring, just in case" signal that
+  AnalyzerPro::on_stopMeasure() turned into a measurementComplete()
+  emission unconditionally, even when nothing was actually measuring.
+  That signal is wired to the same handler a real scan's completion uses,
+  auto-marker placement included. Now only emitted if a measurement was
+  genuinely in progress.
+- Presets table (main window) didn't fill its groupbox the way the
+  Measurements table beside it does -- AdjustToContents sized it off its
+  own column widths (360px) regardless of the ~314px the box actually had
+  to give it, and horizontalHeaderStretchLastSection was off, so it fought
+  its container instead of filling it. Matched Measurements' proven config
+  (AdjustIgnored, stretch-last-section, cascading resizes) and dropped an
+  explicit minimumSize that was fighting the new stretch behavior once
+  added. Also removed an extra leftMargin/rightMargin layer one level of
+  nested layout added around the Presets column that neither the
+  Frequency nor Measurements groupbox has, which was the actual source of
+  the visibly wider whitespace around Presets' controls.
+- Measurements table's "Points" column reverted a finished scan's point
+  count back to "--" after closing Settings. Closing it always signals a
+  system-impedance change, which rebuilds every existing measurement's
+  graphs/data -- the rebuild never restored the point count it briefly
+  cleared, even though the underlying data was intact throughout.
+- Markers table's Z (Ohm) column occasionally showed a marker's impedance
+  doubled up, e.g. "42.93-j11.1942.93-j11.19". Whenever a marker sat
+  exactly on a swept frequency point -- always true for an auto-placed
+  lowest-SWR marker -- the value got appended twice instead of once.
+- Tools > Marker Comparison: pressing Enter in "Current length" closed the
+  whole dialog instead of just committing the field -- Close was the
+  dialog's only button, so it defaulted to acting as the Enter target.
+- "One Fq" mode (set Start equal to Stop, or Range to 0, then Single or
+  Continuous) -- a live single-frequency readout that's been reachable
+  this whole time, just undocumented: could abort the app outright, could
+  silently restart itself in a loop instead of stopping after one
+  reading, and left the Measurements panel's Save/Delete/Clear buttons
+  disabled even after stopping. Single and Continuous now behave
+  consistently (one reading vs. live-until-Esc, respectively) and stop
+  cleanly either way.
+- Settings > Developer > Custom Analyzer's "Don't restrict frequency"
+  checkbox displayed with inverted polarity the first time Settings
+  opened (showed checked when frequency restriction was actually still
+  active) -- self-corrected after one click, but the initial state was
+  backwards.
+- Ctrl+0 did nothing on the SWR chart tab specifically -- every other
+  chart tab's Ctrl+0 (reset Y-axis zoom to default) already worked.
+- Settings > Developer's "BLE Pings" checkbox defaulted to checked, adding
+  BLE's once-a-second keepalive noise to every BLE debug-log capture
+  unless manually turned off first.
+
+## [2.2.1] - 2026-08-16
+
+### Added
+
+- Settings > Themes: edit any of the 5 built-in themes' colors (window
+  background, text, muted text, border, chart background, marker) with a
+  live preview, a Default button to restore a theme's original colors, and
+  Save/Cancel. Themes can be freely renamed.
+- Help > About AntScopeZ now shows a centered build timestamp below the
+  version.
+
+### Changed
+
+- View > Theme now offers 5 built-in options (Light/Dark/Red/Green/Blue)
+  instead of just Light/Dark; the default theme on first launch is now
+  Light instead of Dark.
+- Settings > General's old standalone "Chart background" swatch is gone --
+  chart background is now part of each theme, set from Settings > Themes.
+- "Show Band Name" now defaults to on.
+
+### Fixed
+
+- Switching the active theme from the View menu didn't update the chart
+  background or marker colors, or markers already placed on the chart --
+  only saving a theme from Settings > Themes did.
+- Settings > Themes' color pickers now open with the swatch's current
+  color pre-selected.
+- The open Settings dialog's own text didn't pick up a newly-saved theme
+  until it was closed and reopened.
+- Marker table's "Del"/"Marker" column headers never translated, in any
+  language, even after a live language switch -- now translate properly,
+  and "Del" is a plain "x" (no translation needed) instead.
+- Print dialog's three buttons were fixed-size and clipped translated
+  text; now resize to fit.
+- The window title's "- Analyzer not connected"/connected-device-name
+  suffix could get stuck in English (or whatever language was active at
+  first launch) forever, even after switching languages -- it was being
+  saved and blindly restored verbatim around each language reload instead
+  of actually being rebuilt in the new language.
+- Brought Ukrainian, Japanese, and Spanish translations up to date with
+  everything added since they were last refreshed, including several
+  strings found silently untranslated in older, pre-existing entries.
+
+## [2.2.0] - 2026-08-15
+
+### Added
+
+- Menu bar (File/Edit/View/Connect Analyzer/Help), replacing the old button
+  row.
+- Main window is now a resizable 3-pane layout with a new docked Cursor
+  Details panel.
+- Help > About AntScopeZ, showing the running app version.
+- Settings > Markers: max-markers spinner and a column picker for the
+  Markers popup.
+- Speed/Accuracy slider under Points, replacing the separate "Measurement
+  speed..." dialog.
+- Settings > General: "Data folder" field controlling where Save/Export/
+  Screenshot dialogs default to.
+- Settings' Developer tab: Debug Logging section with per-interface
+  (Serial/USB-HID/BLE/NanoVNA) raw TX/RX logging to a daily log file,
+  including a filter for BLE keepalive traffic.
+
+### Changed
+
+- Settings > Updates tab: app version info moved to the top; firmware-
+  update checks disabled (explained inline) over privacy/security
+  concerns with that network call.
+- Settings' developer-only tab (now "Custom Analyzer") is always visible,
+  with its controls explicitly disabled and marked "under development"
+  instead of hidden.
+- Renamed the device-picker dialog from "Select device" to "Connect
+  Analyzer" for consistency.
+- Points is now a plain text field (capped at 1000) instead of a spinner.
+- Reworked keyboard tab order to follow the visual layout.
+- The Frequency/SWR hint box is now docked in the main window instead of a
+  floating popup.
+- Save, Export, Print, and Screenshot dialogs now share one default folder
+  instead of independent, mostly-unused "last path" settings; default
+  filenames improved.
+
+### Fixed
+
+- Duplicate file extensions sometimes appended in Save/Export dialogs
+  (e.g. ".asd.asd").
+- Measurements/Presets table columns weren't resizable.
+- `.deb` packages could depend on themselves, making them uninstallable.
+- Disabled Single/Continuous/Full Range buttons ignored the Light/Dark
+  theme.
+- Some fields had no fill contrast against the dialog background in Dark
+  mode.
+- Speed/Accuracy slider didn't respond to arrow keys.
+- Tab key got trapped inside the Presets/Measurements tables; added Enter
+  as a shortcut to load a row.
+- Presets table columns now auto-size to content instead of showing a
+  scrollbar.
+- A stray Windows registry file was written on non-Windows platforms
+  during `.asd` file-type registration.
+- PDF export sometimes came out as A4 instead of the configured page size.
+- Device-screenshot images were off-center or edge-to-edge in PDF export.
+- Crosshairs and cursor hints could get stuck, disappear, or not track the
+  chart theme across tabs (including TDR).
+- The scan-position tick stayed drawn after a scan finished on NanoVNA-
+  connected analyzers.
+- Poor contrast on the Markers/graph hint boxes against some chart
+  backgrounds.
+- The graph-hint box flickered at the edge of scanned data and ignored
+  its checkbox while Settings was open.
+- App icon missing from the About dialog.
+- Export dialog missing a Close button.
+
+## [2.1.6] - 2026-08-10
+
+### Changed
+
+- Clarified project licensing: AntScopeZ is distributed under GPLv3-or-later
+  overall; added `THIRD-PARTY-LICENSES.md` covering every bundled/linked
+  third-party component, and credited AntScopeZ's own copyright in
+  `LICENSE.txt` alongside RigExpert's original.
+- Packaged builds now ship the license/attribution files above instead of
+  leaving them source-tree-only.
+
+### Fixed
+
+- Save dialog no longer suggests a double `.asd.asd` filename.
+
+## [2.1.5] - 2026-08-10
+
+### Fixed
+
+- Fixed a `.deb` install issue that could break other installed Qt
+  applications.
+- Fixed a crash on first launch after leaving the app on a hidden
+  developer-mode tab.
+- Fixed a crash when using a custom analyzer profile with a connected
+  device.
+- Fixed popup positions not saving correctly under non-English languages.
+- Fixed the plot occasionally not responding to mouse input right after
+  launch.
+- Fixed Start/Delete/Clear occasionally becoming unresponsive after
+  placing a marker.
+- Fixed "Open 'Connect Analyzer' on launch" not fully disabling
+  auto-connect when unchecked.
+
+### Changed
+
+- Development builds between releases now report a `-dev` version suffix.
+
+## [2.1.4] - 2026-08-09
+
+### Changed
+
+- Renamed the project from AntScope2 to **AntScopeZ** throughout (executable,
+  icons, window titles, file associations, and settings location).
+- Added a real Light/Dark theme system with a functional theme selector in
+  Settings.
+- Replaced the Metric/Imperial checkboxes with a single combo box.
+- Removed the RigExpert logo from the main window.
+- The `.deb` package now bundles its own copy of Qt 6.11 instead of relying
+  on the system's Qt.
+
+### Added
+
+- A band selector above the Presets list for quickly setting Start/Stop
+  from a named amateur-radio band.
+- Settings option to open Connect Analyzer automatically on launch.
+- UI languages are now discovered automatically instead of being hardcoded;
+  added a Spanish translation.
+- User guide documentation for the Customize/custom-analyzer settings.
+
+### Fixed
+
+- Numerous theme and dialog rendering issues (unreadable text, unstyled
+  dialogs, Light mode not applying).
+- Smith chart and TDR/S21 axis colors now follow the active theme.
+- Start/Stop value formatting and out-of-range input handling.
+- Several layout issues in Settings and the main window causing overlapping
+  controls.
+- Translation loading in non-standard build layouts.
+- Firmware-update button now works; the update flow saves the downloaded
+  file instead of attempting to flash it automatically.
+- Tab-click reliability issues near the tab bar.
+- Connect Analyzer could open more than one copy of itself, or fail to
+  block other windows while open.
+- Screenshot dialog image no longer overlaps its buttons.
+- Save dialog now suggests the measurement's own name as the filename.
+- Minor spelling/translation fixes ("analyser" -> "analyzer").
+
+### Removed
+
+- Vendor auto-update and telemetry checks that contacted RigExpert's
+  servers on every launch/connect.
+- Dead code paths, unused build options, and unused image assets.
+- Bundled sample calibration files (each user now creates their own).
+
+### Known issues
+
+- Print dialog page-size default and Properties layout glitch (Linux).
+- Some Qt-provided translations are incomplete (e.g. Spanish file-dialog
+  strings).
+
+## [2.1.3]
+
+Baseline — changelog tracking starts here. See `git log` for history prior
+to this point.

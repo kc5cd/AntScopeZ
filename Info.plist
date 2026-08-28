@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>NSBluetoothAlwaysUsageDescription</key>
+        <string>This application requires bluetooth in order to connect and transfer data between different devices</string>
+        <key>CFBundleDevelopmentRegion</key>
+	<string>Ukraine</string>
+	<key>CFBundleDisplayName</key>
+	<string>AntScopeZ</string>
+	<key>CFBundleExecutable</key>
+	<string>AntScopeZ</string>
+	<key>CFBundleIconFile</key>
+        <string>AntScopeZ</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.k4hez.AntScopeZ</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>AntScopeZ</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+        <string>2.1.4</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>LSApplicationCategoryType</key>
+        <string>public.app-category.utilities</string>
+</dict>
+</plist>
