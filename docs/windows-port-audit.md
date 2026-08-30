@@ -86,28 +86,56 @@ on Windows."*
   this session; noting the exact package IDs here since they aren't
   obvious from the display names in the Maintenance Tool GUI. Risk/size:
   trivial once you know the package name.
-- **No `windeployqt` (or equivalent) step exists for Windows packaging.**
-  `CMakeLists.txt`'s install-rules section only installs license/doc
-  files flat into `CMAKE_INSTALL_BINDIR` for `WIN32` (~line 783, ~827);
-  the actual Qt-bundling logic (`qt6_generate_deploy_script()`, ~line
-  845 onward) is gated `elseif(NOT APPLE)`, i.e. Linux-only.
-  `THIRD-PARTY-LICENSES.md` independently flags this same gap. **Not
-  fixed yet** — needs a `WIN32` branch mirroring the Linux deploy-script
-  pattern, or a `windeployqt` post-build/install step. Risk/size:
-  moderate — this is packaging, not source, but touches the shared
-  install-rules section; check in before implementing per the structural
-  change threshold in `CLAUDE.md`.
-- **OpenSSL linkage on Windows is unresolved.** `app/libeay32.dll` and
-  `app/ssleay32.dll` (legacy OpenSSL 1.0.x) sit in the tree unreferenced
-  by any CMake rule — leftover from the old qmake build.
-  `CMakeLists.txt`'s `WIN32` block has a standing comment that the old
-  `.pro` file's `win64`-scope OpenSSL link flags were deliberately not
-  carried over, "add them only once it is confirmed Windows needs them."
-  **Not investigated yet**: does anything in the app (e.g.
-  `analyzer/updater/downloader.cpp`'s HTTPS use) actually require
-  OpenSSL, or does Qt6's default Schannel backend on Windows cover it?
-  Risk/size: small to check, but the answer determines whether
-  `app/*.dll` are needed at all or should be removed as dead weight.
+- **No `windeployqt` (or equivalent) step exists for Windows packaging —
+  confirmed blocking, not just theoretical.** `CMakeLists.txt`'s
+  install-rules section only installs license/doc files flat into
+  `CMAKE_INSTALL_BINDIR` for `WIN32` (~line 783, ~827); the actual
+  Qt-bundling logic (`qt6_generate_deploy_script()`, ~line 845 onward) is
+  gated `elseif(NOT APPLE)`, i.e. Linux-only. `THIRD-PARTY-LICENSES.md`
+  independently flags this same gap. **Confirmed 2026-08-30:** running
+  the freshly-built `AntScopeZ.exe` directly fails with "the code
+  execution cannot proceed because Qt6Core.dll/Qt6Gui.dll/
+  Qt6Network.dll/Qt6Bluetooth.dll was not found" — exactly as predicted.
+  **Not fixed yet** — needs a `WIN32` branch mirroring the Linux
+  deploy-script pattern, or a `windeployqt` post-build/install step.
+  Risk/size: moderate — this is packaging, not source, but touches the
+  shared install-rules section; check in before implementing per the
+  structural change threshold in `CLAUDE.md`.
+- **OpenSSL linkage on Windows — investigated 2026-08-30, resolved: not
+  needed.** `app/libeay32.dll`/`app/ssleay32.dll` (legacy OpenSSL 1.0.x)
+  sit in the tree unreferenced by any CMake rule, leftover from the old
+  qmake build. `CMakeLists.txt`'s `WIN32` block has a standing comment
+  that the old `.pro` file's `win64`-scope OpenSSL link flags were
+  deliberately not carried over, "add them only once it is confirmed
+  Windows needs them." Findings:
+  - `analyzer/updater/downloader.cpp`'s `QSslConfiguration`/HTTPS code is
+    entirely `#if 0`'d out (see that file's own comment: disabled because
+    it phones home to RigExpert with device/OS telemetry, and its only
+    caller is also disabled) — not a live network path.
+  - `src/licenseagent.cpp` **does** make live HTTPS requests via
+    `QNetworkAccessManager`/`QSslConfiguration` (license verification) —
+    a real, active TLS consumer, unlike `downloader.cpp`.
+  - Per Qt's own docs (`ssl.html`, verified against the Qt 6.11
+    reference): Qt Online Installer builds for Windows ship a native
+    Schannel TLS backend by default — OpenSSL is only linked in if a
+    *source* build of Qt explicitly opts in with `-openssl-linked`, which
+    the prebuilt installer kit does not. Confirmed on this machine: `C:\Qt\
+    6.11.2\mingw_64\plugins\tls\` has both `qopensslbackend.dll` and
+    `qschannelbackend.dll`, but no OpenSSL 3.x runtime DLLs
+    (`libssl-3-x64.dll`/`libcrypto-3-x64.dll`) exist anywhere in the Qt
+    install. Qt tries backends in order (OpenSSL first) and falls through
+    to the next on load failure — so with no OpenSSL 3.x DLLs present,
+    it silently falls through to Schannel, which works standalone.
+  - `app/libeay32.dll`/`ssleay32.dll` are OpenSSL **1.0.x** (pre-3.0
+    naming scheme) — even if something did try to load them, Qt 6.11's
+    OpenSSL backend requires OpenSSL 3 at runtime, so these specific
+    files couldn't satisfy it regardless. They're not just unreferenced,
+    they're the wrong major version.
+  - **Conclusion: no OpenSSL linkage needed.** `licenseagent.cpp`'s HTTPS
+    calls will work via Schannel with zero extra packaging. `app/
+    libeay32.dll`/`ssleay32.dll` are dead weight from the old build and
+    can be deleted — small, mechanical cleanup, safe to do without
+    check-in.
 - **First native build baseline (this session):** see the
   `## Build baseline` section below once the first `windows-mingw`
   build finishes.
