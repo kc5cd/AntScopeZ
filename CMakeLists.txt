@@ -829,6 +829,16 @@ if(WIN32)
         DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
+    # ftd2xx.dll is copied next to the binary by the POST_BUILD custom_command
+    # above for a dev/debug build, but that step only touches the build tree
+    # -- cmake --install has no rule of its own to carry it into a packaged
+    # install, so FTDI-based device support was silently missing from every
+    # packaged build until this rule was added. Found while building the
+    # first packaged release (2026-08-30).
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/ftdi/amd64/ftd2xx.dll
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
     # Bundle Qt's own DLLs/plugins next to the executable via Qt's CMake-native
     # deploy API (qt_deploy_runtime_dependencies(), Qt 6.3+) -- confirmed via
     # Qt's own docs that on Windows this command uses windeployqt internally,

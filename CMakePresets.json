@@ -70,12 +70,22 @@
         },
         {
             "name": "windows-mingw",
-            "displayName": "Windows (Qt 6.11.2 MinGW)",
+            "displayName": "Windows Debug (Qt 6.11.2 MinGW)",
             "description": "Native Windows build against the Qt Online Installer's Qt 6.11.2 MinGW 13.1.0 kit -- built and run directly on Windows, not cross-compiled. First-cut preset added to establish a Windows build baseline; the resulting build is otherwise unverified beyond configure+build succeeding -- see docs/windows-port-audit.md for what's actually been checked.",
             "inherits": "qt-6.11-windows",
             "binaryDir": "${sourceDir}/build-windows-mingw",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-mingw-release",
+            "displayName": "Windows Release (Qt 6.11.2 MinGW)",
+            "description": "Release variant of windows-mingw, for packaging -- same kit/toolchain, mirrors the Linux debug/release preset split above.",
+            "inherits": "qt-6.11-windows",
+            "binaryDir": "${sourceDir}/build-windows-mingw-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
             }
         }
     ],
@@ -95,6 +105,10 @@
         {
             "name": "windows-mingw",
             "configurePreset": "windows-mingw"
+        },
+        {
+            "name": "windows-mingw-release",
+            "configurePreset": "windows-mingw-release"
         }
     ]
 }
