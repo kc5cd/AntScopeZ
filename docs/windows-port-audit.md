@@ -86,21 +86,32 @@ on Windows."*
   this session; noting the exact package IDs here since they aren't
   obvious from the display names in the Maintenance Tool GUI. Risk/size:
   trivial once you know the package name.
-- **No `windeployqt` (or equivalent) step exists for Windows packaging —
-  confirmed blocking, not just theoretical.** `CMakeLists.txt`'s
-  install-rules section only installs license/doc files flat into
-  `CMAKE_INSTALL_BINDIR` for `WIN32` (~line 783, ~827); the actual
-  Qt-bundling logic (`qt6_generate_deploy_script()`, ~line 845 onward) is
-  gated `elseif(NOT APPLE)`, i.e. Linux-only. `THIRD-PARTY-LICENSES.md`
-  independently flags this same gap. **Confirmed 2026-08-30:** running
-  the freshly-built `AntScopeZ.exe` directly fails with "the code
-  execution cannot proceed because Qt6Core.dll/Qt6Gui.dll/
-  Qt6Network.dll/Qt6Bluetooth.dll was not found" — exactly as predicted.
-  **Not fixed yet** — needs a `WIN32` branch mirroring the Linux
-  deploy-script pattern, or a `windeployqt` post-build/install step.
-  Risk/size: moderate — this is packaging, not source, but touches the
-  shared install-rules section; check in before implementing per the
-  structural change threshold in `CLAUDE.md`.
+- ~~No `windeployqt` (or equivalent) step exists for Windows packaging.~~
+  **Fixed 2026-08-30.** `CMakeLists.txt`'s `WIN32` install-rules branch
+  only installed license/doc files flat into `CMAKE_INSTALL_BINDIR`; the
+  Qt-bundling logic was Linux-only. **Confirmed blocking** by an actual
+  run first: the freshly-built `AntScopeZ.exe` failed with "Qt6Core.dll/
+  Qt6Gui.dll/Qt6Network.dll/Qt6Bluetooth.dll was not found." User-approved
+  fix (structural, checked in first per `CLAUDE.md`'s threshold): added a
+  `WIN32` branch reusing the same `qt_deploy_runtime_dependencies()` Qt
+  CMake API the Linux branch already uses, targeting
+  `CMAKE_INSTALL_BINDIR` directly with `GENERATE_QT_CONF`/
+  `NO_TRANSLATIONS` — no RPATH/wrapper-script complexity needed, since
+  Windows resolves DLLs from the exe's own directory and this app's
+  Windows install dir isn't shared with other applications the way
+  Linux's `/usr/bin` is. Confirmed via Qt's own docs this command uses
+  `windeployqt` internally on Windows. Verified end-to-end: `cmake
+  --install` into a staging prefix correctly deployed all 9 Qt DLLs, the
+  MinGW runtime (`libgcc_s_seh-1.dll`/`libstdc++-6.dll`/
+  `libwinpthread-1.dll`), and plugins (`platforms/qwindows.dll`,
+  `tls/qschannelbackend.dll`, imageformats, iconengines, styles, generic,
+  networkinformation) — and the staged `AntScopeZ.exe` **launched and ran
+  successfully** (confirmed via `tasklist`, clean process, no console
+  errors, then terminated). windeployqt's own output independently
+  confirmed the OpenSSL finding above: "Skipping plugin
+  qopensslbackend.dll. Use `-force-openssl`... if you want to use it" —
+  it deploys Schannel (`qschannelbackend.dll`) by default, matching the
+  conclusion that no OpenSSL linkage is needed.
 - **OpenSSL linkage on Windows — investigated 2026-08-30, resolved: not
   needed.** `app/libeay32.dll`/`app/ssleay32.dll` (legacy OpenSSL 1.0.x)
   sit in the tree unreferenced by any CMake rule, leftover from the old
@@ -191,12 +202,16 @@ after installing the missing Qt Serial Port/Bluetooth components above):
 `AntScopeZ.exe` linked successfully; the `if(WIN32)` post-build step
 correctly copied `ftdi/amd64/ftd2xx.dll` next to it.
 
-This is a compile/link-only baseline — the resulting `.exe` has **not**
-been run yet (no `windeployqt` step means it likely can't find Qt's DLLs
-without the Qt `bin` directory on `PATH`; see the packaging gap above),
-and none of the "Verification checklist" items above have been exercised.
-Don't read a clean build as "the port works" — it means the source
-compiles against MinGW without issue, which given how little
-Linux-specific code existed in the first place (see the top of this
-document) isn't a large surprise. The real unknowns are all in the
-checklist and the packaging gap, not the compile step.
+**Update 2026-08-30:** with the `windeployqt`-equivalent deploy step now
+added (see the packaging-gap entry above), a `cmake --install` into a
+staging prefix produces a fully self-contained `bin/` directory, and the
+staged `AntScopeZ.exe` **launches and runs successfully** (verified via
+`tasklist`, clean process, no console errors). This is still just a
+launch smoke test, not functional verification — none of the
+"Verification checklist" items above (device connection, file
+association, etc.) have been exercised, since most need real analyzer
+hardware. Don't read "launches cleanly" as "the port works" — it means
+the source compiles against MinGW and the app starts without issue,
+which given how little Linux-specific code existed in the first place
+(see the top of this document) isn't a large surprise. The real unknowns
+are the checklist items, not the compile/launch step.

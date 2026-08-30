@@ -828,6 +828,36 @@ if(WIN32)
     install(FILES ${ANTSCOPE_RUNTIME_FILES} ${ANTSCOPE_QM_FILES} ${ANTSCOPE_QT_QM_FILES} ${ANTSCOPE_QTBASE_OVERRIDE_QM_FILES}
         DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
+
+    # Bundle Qt's own DLLs/plugins next to the executable via Qt's CMake-native
+    # deploy API (qt_deploy_runtime_dependencies(), Qt 6.3+) -- confirmed via
+    # Qt's own docs that on Windows this command uses windeployqt internally,
+    # so this gets windeployqt's plugin-aware deployment (platform plugin,
+    # TLS backend, etc. -- not just directly-linked DLLs) without a separate
+    # custom_command/post-build step. Much simpler than the Linux branch
+    # below: Windows has no RPATH concept (DLLs next to the exe are found
+    # automatically), and CMAKE_INSTALL_BINDIR here is this app's own private
+    # install directory, not one shared with other applications the way
+    # Linux's /usr/bin is -- so none of the qt.conf-pollution/wrapper-script
+    # complexity the Linux branch needs applies here. NO_TRANSLATIONS for the
+    # same reason as the Linux branch: this app's own hand-picked .qm install
+    # rule above already covers the languages actually used.
+    if(COMMAND qt6_generate_deploy_script)
+        qt6_generate_deploy_script(
+            TARGET AntScopeZ
+            OUTPUT_SCRIPT deploy_script
+            CONTENT "
+set(QT_DEPLOY_BIN_DIR \"${CMAKE_INSTALL_BINDIR}\")
+qt_deploy_runtime_dependencies(
+    EXECUTABLE \"\${QT_DEPLOY_BIN_DIR}/$<TARGET_FILE_NAME:AntScopeZ>\"
+    GENERATE_QT_CONF
+    NO_TRANSLATIONS
+)
+"
+        )
+        install(SCRIPT ${deploy_script})
+    endif()
+
 elseif(NOT APPLE) # Linux and other Unix
     install(FILES ${ANTSCOPE_RUNTIME_FILES} ${ANTSCOPE_QM_FILES} ${ANTSCOPE_QT_QM_FILES} ${ANTSCOPE_QTBASE_OVERRIDE_QM_FILES}
         DESTINATION ${CMAKE_INSTALL_DATADIR}/antscopez
