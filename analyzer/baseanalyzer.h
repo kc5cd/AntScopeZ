@@ -44,6 +44,12 @@ signals:
     void analyzerDisconnected();
     void newData(RawData);
     void newS21Data(S21Data);
+    // Real 2-port S-parameter data, per point -- only NanovnaAnalyzer
+    // emits this today (see its own comment on SParamPoint vs. the legacy
+    // scalar S21Data above). Deliberately not tied into any completion
+    // counter here or in AnalyzerPro -- it's a pure side channel to the
+    // S21 tab's dataSParam pipeline.
+    void newSParamPoint(SParamPoint);
     void newUserDataHeader(QStringList);
     void newUserData(RawData, UserData);
     void analyzerDataStringArrived(QString);

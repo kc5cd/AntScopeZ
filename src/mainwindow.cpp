@@ -498,6 +498,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(m_analyzer, &AnalyzerPro::newData, m_measurements, &Measurements::on_newDataRedraw);
     connect(m_analyzer, &AnalyzerPro::newS21Data, m_measurements, &Measurements::on_newS21Data);
+    connect(m_analyzer, &AnalyzerPro::newSParamPoint, m_measurements, &Measurements::on_newSParamPoint);
+    // Reveal the S21 tab on the first point of a live 2-port capture, same
+    // as on_importFinished() does for a .s2p import (mainwindow_measurements_io.cpp).
+    connect(m_measurements, &Measurements::sparamDataStarted, this, [this](){
+        ui->tabWidget->setTabVisible(ui->tabWidget->indexOf(m_tab_s21), true);
+    });
     connect(m_analyzer, &AnalyzerPro::newAnalyzerData, m_measurements, &Measurements::on_newAnalyzerData);
     connect(m_analyzer, &AnalyzerPro::newUserData, m_measurements, &Measurements::on_newUserData);
     connect(m_analyzer, &AnalyzerPro::newUserDataHeader, m_measurements, &Measurements::on_newUserDataHeader);

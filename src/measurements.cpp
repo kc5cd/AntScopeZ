@@ -459,6 +459,7 @@ void Measurements::on_newMeasurement(QString name, qint64 from, qint64 to, qint3
 void Measurements::on_newMeasurement(QString name)
 {
     m_interrupted = false;
+    m_liveS21PhaseHavePrev = false; // fresh phase-unwrap run for on_newSParamPoint(), see its own comment
     while(m_measurements.length() >= g_maxMeasurements)
     {
         deleteRow(0);
@@ -1436,6 +1437,37 @@ void Measurements::on_newS21Data(S21Data _s21Data)
 
     data.value = _s21Data.stage;
     m_measurements.last().s21StageGraph.add(data);
+    on_redrawGraphs(true);
+}
+
+void Measurements::on_newSParamPoint(SParamPoint sp)
+{
+    if (m_measurements.isEmpty())
+        return;
+
+    measurement& mm = m_measurements.last();
+    bool firstPoint = mm.dataSParam.isEmpty();
+    mm.dataSParam.append(sp);
+
+    // fq is MHz (matching RawData.fq's convention) -- *1000 to the kHz
+    // every chart key actually uses, same as populateSParamData().
+    double fqKey = sp.fq*1000;
+    QCPGraphData mag, phase;
+    mag.key = phase.key = fqKey;
+    mag.value = 20*log10(std::abs(sp.s21));
+    phase.value = unwrapPhaseDeg(std::arg(sp.s21)*180.0/M_PI, m_liveS21PhaseHavePrev, m_liveS21PhasePrevRaw, m_liveS21PhasePrevUnwrapped);
+    mm.s21MagGraph.add(mag);
+    mm.s21PhaseGraph.add(phase);
+    // S12/S22 deliberately left untouched here: NanoVNA-family hardware
+    // only measures forward S11+S21 in one sweep, so sp.s12 is always the
+    // SParamPoint default (0) for a live capture -- populateSParamData()'s
+    // unconditional S12 mag/phase derivation would otherwise plot -inf dB
+    // from that zeroed value.
+
+    if (firstPoint) {
+        emit sparamDataStarted();
+    }
+
     on_redrawGraphs(true);
 }
 

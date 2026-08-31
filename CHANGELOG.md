@@ -11,6 +11,12 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+### Added
+
+- NanoVNA: real 2-port S11+S21 on every scan (was S11-only), plus an
+  opportunistic ASCII/binary `scan` fast path when the firmware supports
+  it. Not yet validated against real hardware.
+
 ## [2.2.2] - 2026-08-28
 
 ### Added

@@ -1,6 +1,7 @@
 #include "nanovna_analyzer.h"
 #include <qserialport.h>
 #include <QMessageBox>
+#include <cstring>
 #include "debuglog.h"
 
 // static members
@@ -77,6 +78,19 @@ void NanovnaAnalyzer::dataArrived()
     DebugLog::nanovnaRx(ar);
     //qDebug() << "NANO dataArrived: " << QString::fromLatin1(ar);
 
+    if (getParseState() == WAIT_NANO_SCAN_BINARY) {
+        qint32 count = parseBinaryScan();
+        if (count == 0)
+            return; // full frame hasn't arrived yet -- wait for more bytes
+        m_incomingBuffer.remove(0, count);
+        // parseBinaryScan() always leaves the state machine in
+        // WAIT_NANO_NO once it has consumed a frame (success or bail-out),
+        // so fall through to the normal text parser for anything left in
+        // the buffer this same call (typically the shell's "ch> " prompt
+        // that follows right after the binary payload) instead of leaving
+        // it unread until more bytes happen to arrive later.
+    }
+
     int count = parse(m_incomingBuffer);
     m_incomingBuffer.remove(0, count);
 }
@@ -101,8 +115,15 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                 setParseState(WAIT_NANO_VER_COMPLETE);
         } else if (getParseState() == WAIT_NANO_VER_COMPLETE) {
             if (data.contains("ch>")) {
-                setParseState(WAIT_NANO_NO);
-                sendData("sweep 100000 1000000 101\r\n");
+                // Used to fire a throwaway dummy "sweep" here just to
+                // finish the handshake. Replaced with a real capability
+                // probe: does this firmware's shell have the newer
+                // single-command "scan" (and does a binary-mode reply
+                // round-trip)? Every measurement tier below feeds the same
+                // SParamPoint pipeline either way -- this only decides how
+                // the bytes get fetched.
+                probeScanCapability();
+                return arr.size();
             } else {
                 if (data.contains("Board:")) {
                     QString board = data.replace("Board:", "");
@@ -110,6 +131,22 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                     if (param != nullptr)
                         emit analyzerFound(param->index());
                 }
+            }
+        } else if (getParseState() == WAIT_NANO_SCAN_PROBE) {
+            if (data.contains("usage: scan")) {
+                // "scan" exists -- provisional AsciiOnly, upgraded to
+                // AsciiAndBinary below if the binary check pans out.
+                m_scanSupport = ScanSupport::AsciiOnly;
+            } else if (data.startsWith("scan?")) {
+                m_scanSupport = ScanSupport::Unsupported;
+            } else if (data.contains("ch>")) {
+                if (m_scanSupport == ScanSupport::AsciiOnly) {
+                    probeBinaryScanSupport();
+                    return arr.size();
+                }
+                if (m_scanSupport == ScanSupport::Unknown)
+                    m_scanSupport = ScanSupport::Unsupported; // defensive: got a prompt without seeing either expected reply
+                setParseState(WAIT_NANO_NO);
             }
         } else if (getParseState() == WAIT_NANO_SWEEP) {
             if (data.contains("ch>")) {
@@ -120,30 +157,33 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
         } else if (getParseState() == WAIT_NANO_FQ) {
             if (data.contains("ch>")) {
                 setParseState(WAIT_NANO_DATA);
-                sendData("data\r\n");
+                m_fqCursor = 0;
+                m_s11Buffer.clear();
+                sendData("data 0\r\n");
                 return arr.size();
             } else {
               m_listFQ << data;
             }
         } else if (getParseState() == WAIT_NANO_DATA) {
             if (data.contains("ch>")) {
-                setParseState(WAIT_NANO_NO);
-                //qDebug() << "NanovnaAnalyzer::parse STOP";
-                emit completeMeasurement();
-                if (getContinuos()) {
-                    startMeasure(m_fqFrom, m_fqTo, m_dotsNumber);
-                } else {
-                    setIsMeasuring(false);
-                    setContinuos(false);
-                }
+                // S11 pass done. Always follow up with a real "data 1"
+                // pass so every fallback-sequence scan captures true
+                // 2-port S21 too, not just S11 -- the hardware measures
+                // both channels in the same sweep regardless, "data 1" is
+                // just reading back the other half of it.
+                m_fqCursor = 0;
+                setParseState(WAIT_NANO_DATA_S21);
+                sendData("data 1\r\n");
                 return arr.size();
             } else {
                 if (m_isMeasuring) {
-                    if (m_listFQ.isEmpty()) {
-                        emit completeMeasurement();
+                    if (m_fqCursor >= m_listFQ.size()) {
+                        // more data lines than frequencies -- ignore the stray line rather than end the scan early
                     } else {
-                      QString s1p = m_listFQ.takeFirst() + " " + data;
+                      QString s1p = m_listFQ.at(m_fqCursor) + " " + data;
                       RawData raw = toRawData(s1p);
+                      m_s11Buffer.append(parseReIm(data));
+                      m_fqCursor++;
                       if (raw.fq > 0) {
                           emit newData(raw);
                       } else {
@@ -151,6 +191,35 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                       }
                     }
                 }
+            }
+        } else if (getParseState() == WAIT_NANO_DATA_S21) {
+            if (data.contains("ch>")) {
+                finishMeasurementSegment();
+                return arr.size();
+            } else {
+                if (m_isMeasuring) {
+                    if (m_fqCursor >= m_listFQ.size() || m_fqCursor >= m_s11Buffer.size()) {
+                        // stray extra line -- ignore, same as the S11 pass above
+                    } else {
+                        double fq = m_listFQ.at(m_fqCursor).toDouble() * 0.000001;
+                        std::complex<double> s21 = parseReIm(data);
+                        SParamPoint sp;
+                        sp.fq = fq;
+                        sp.s11 = m_s11Buffer.at(m_fqCursor);
+                        sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
+                        sp.s21 = s21;
+                        sp.s22 = std::complex<double>(0,0);
+                        emit newSParamPoint(sp);
+                        m_fqCursor++;
+                    }
+                }
+            }
+        } else if (getParseState() == WAIT_NANO_SCAN_ASCII) {
+            if (data.contains("ch>")) {
+                finishMeasurementSegment();
+                return arr.size();
+            } else {
+                parseAsciiScanLine(data);
             }
         } else {
             emit dataReceived(data);
@@ -226,8 +295,8 @@ qint64 NanovnaAnalyzer::sendData(QString data)
 void NanovnaAnalyzer::startMeasure(qint64 fqFrom, qint64 fqTo, int dotsNumber, bool frx)
 {
     //qDebug() << "NanovnaAnalyzer::startMeasure" << fqFrom << fqTo << dotsNumber;
-    if (getParseState() == WAIT_NANO_SWEEP) {
-        //qDebug() << "getParseState() == WAIT_NANO_SWEEP";
+    if (getParseState() != WAIT_NANO_NO) {
+        //qDebug() << "NanovnaAnalyzer::startMeasure: busy, state=" << getParseState();
         return;
     }
     Q_UNUSED (frx)
@@ -236,12 +305,223 @@ void NanovnaAnalyzer::startMeasure(qint64 fqFrom, qint64 fqTo, int dotsNumber, b
     m_dotsNumber = dotsNumber;
     m_isMeasuring = true;
     m_listFQ.clear();
+    m_s11Buffer.clear();
+    m_fqCursor = 0;
 
+    switch (m_scanSupport) {
+    case ScanSupport::AsciiAndBinary:
+        startScanSweep(true);
+        break;
+    case ScanSupport::AsciiOnly:
+        startScanSweep(false);
+        break;
+    case ScanSupport::Unsupported:
+    case ScanSupport::Unknown:
+    default:
+        startFallbackSweep();
+        break;
+    }
+}
+
+void NanovnaAnalyzer::startFallbackSweep()
+{
     setParseState(WAIT_NANO_SWEEP);
-    QString cmd = QString("sweep %1 %2 %3\r\n").arg(fqFrom).arg(fqTo).arg(dotsNumber);
-    //QString cmd = QString("sweep 100 1000000000 101\r\n").arg(fqFrom).arg(fqTo).arg(dotsNumber);
-    //qDebug() << "NanovnaAnalyzer::startMeasure " << cmd;
+    QString cmd = QString("sweep %1 %2 %3\r\n").arg(m_fqFrom).arg(m_fqTo).arg(m_dotsNumber);
     sendData(cmd);
+}
+
+void NanovnaAnalyzer::startScanSweep(bool useBinary)
+{
+    // outmask bits from NanoVNA-D's cmd_scan(): OUT_FREQ=0x01,
+    // OUT_DATA0(S11)=0x02, OUT_DATA1(S21)=0x04, BINARY=0x80. Always ask
+    // for freq+S11+S21 together -- that's the whole point of this path.
+    quint16 mask = 0x01 | 0x02 | 0x04;
+    if (useBinary)
+        mask |= 0x80;
+
+    m_binarySentMask = mask;
+    m_binarySentPoints = (quint16)m_dotsNumber;
+    m_binaryExpectedBytes = -1;
+
+    setParseState(useBinary ? WAIT_NANO_SCAN_BINARY : WAIT_NANO_SCAN_ASCII);
+    QString cmd = QString("scan %1 %2 %3 %4\r\n").arg(m_fqFrom).arg(m_fqTo).arg(m_dotsNumber).arg(mask);
+    sendData(cmd);
+}
+
+void NanovnaAnalyzer::parseAsciiScanLine(const QString& line)
+{
+    // "<freq> <s11re> <s11im> <s21re> <s21im>" -- one point per line
+    // (mask = OUT_FREQ|OUT_DATA0|OUT_DATA1, see startScanSweep()).
+    QStringList tok = line.split(' ', Qt::SkipEmptyParts);
+    if (tok.size() < 5)
+        return; // malformed/short line -- skip rather than index out of bounds
+
+    bool ok;
+    double freqHz = tok.at(0).toDouble(&ok);
+    double s11re  = tok.at(1).toDouble(&ok);
+    double s11im  = tok.at(2).toDouble(&ok);
+    double s21re  = tok.at(3).toDouble(&ok);
+    double s21im  = tok.at(4).toDouble(&ok);
+    Q_UNUSED(ok) // permissive, matches toRawData()'s own style -- a bad token just yields 0 rather than dropping the whole point
+
+    emitPoint(freqHz * 0.000001, std::complex<double>(s11re, s11im), std::complex<double>(s21re, s21im));
+}
+
+qint32 NanovnaAnalyzer::parseBinaryScan()
+{
+    const int HEADER_SIZE = 4; // uint16 mask + uint16 points, see NanoVNA-D main.c cmd_scan()'s SCAN_MASK_BINARY branch
+
+    if (m_incomingBuffer.size() < HEADER_SIZE)
+        return 0; // wait for the rest of the header
+
+    if (m_binaryExpectedBytes < 0) {
+        std::memcpy(&m_binaryMask, m_incomingBuffer.constData(), sizeof(quint16));
+        std::memcpy(&m_binaryPoints, m_incomingBuffer.constData()+2, sizeof(quint16));
+
+        if (m_binaryMask != m_binarySentMask || m_binaryPoints != m_binarySentPoints) {
+            // Doesn't look like the binary reply we asked for (stale text,
+            // or this firmware doesn't really support it) -- bail out
+            // rather than trust framing we can't verify.
+            m_binaryExpectedBytes = -1;
+            if (m_scanBinaryProbeInProgress) {
+                m_scanBinaryProbeInProgress = false;
+                m_scanSupport = ScanSupport::AsciiOnly;
+                if (m_scanProbeTimeoutTimer != nullptr)
+                    m_scanProbeTimeoutTimer->stop();
+            } else {
+                // A real measurement's binary reply came back malformed --
+                // demote for next time and end this scan cleanly instead
+                // of silently returning wrong data.
+                m_scanSupport = ScanSupport::AsciiOnly;
+                setIsMeasuring(false);
+                emit signalMeasurementError();
+            }
+            setParseState(WAIT_NANO_NO);
+            return m_incomingBuffer.size(); // discard -- can't trust anything else in here
+        }
+
+        int recordSize = 0;
+        if (m_binaryMask & 0x01) recordSize += sizeof(quint32); // freq_t
+        if (m_binaryMask & 0x02) recordSize += sizeof(float)*2; // S11 re/im
+        if (m_binaryMask & 0x04) recordSize += sizeof(float)*2; // S21 re/im
+        m_binaryExpectedBytes = HEADER_SIZE + recordSize * m_binaryPoints;
+    }
+
+    if (m_incomingBuffer.size() < m_binaryExpectedBytes)
+        return 0; // frame not fully arrived yet
+
+    const char* p = m_incomingBuffer.constData() + HEADER_SIZE;
+    for (int i = 0; i < m_binaryPoints; i++) {
+        quint32 freqHz = 0;
+        float s11re=0, s11im=0, s21re=0, s21im=0;
+        if (m_binaryMask & 0x01) { std::memcpy(&freqHz, p, sizeof(quint32)); p += sizeof(quint32); }
+        if (m_binaryMask & 0x02) { std::memcpy(&s11re, p, sizeof(float)); p += sizeof(float); std::memcpy(&s11im, p, sizeof(float)); p += sizeof(float); }
+        if (m_binaryMask & 0x04) { std::memcpy(&s21re, p, sizeof(float)); p += sizeof(float); std::memcpy(&s21im, p, sizeof(float)); p += sizeof(float); }
+
+        if (!m_scanBinaryProbeInProgress) {
+            emitPoint((double)freqHz * 0.000001, std::complex<double>(s11re, s11im), std::complex<double>(s21re, s21im));
+        }
+    }
+
+    qint32 consumed = m_binaryExpectedBytes;
+    m_binaryExpectedBytes = -1;
+
+    if (m_scanBinaryProbeInProgress) {
+        m_scanBinaryProbeInProgress = false;
+        m_scanSupport = ScanSupport::AsciiAndBinary;
+        if (m_scanProbeTimeoutTimer != nullptr)
+            m_scanProbeTimeoutTimer->stop();
+        setParseState(WAIT_NANO_NO);
+    } else {
+        finishMeasurementSegment();
+    }
+
+    return consumed;
+}
+
+void NanovnaAnalyzer::emitPoint(double fqMHz, std::complex<double> s11, std::complex<double> s21)
+{
+    double re = s11.real(), im = s11.imag();
+    RawData raw;
+    raw.fq = fqMHz;
+    raw.r = (1-re*re-im*im)/((1-re)*(1-re)+im*im) * 50;
+    raw.x = (2*im)/((1-re)*(1-re)+im*im) * 50;
+    emit newData(raw);
+
+    SParamPoint sp;
+    sp.fq = fqMHz;
+    sp.s11 = s11;
+    sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
+    sp.s21 = s21;
+    sp.s22 = std::complex<double>(0,0);
+    emit newSParamPoint(sp);
+}
+
+std::complex<double> NanovnaAnalyzer::parseReIm(const QString& line)
+{
+    QStringList tok = line.split(' ', Qt::SkipEmptyParts);
+    if (tok.size() < 2)
+        return std::complex<double>(0,0);
+    return std::complex<double>(tok.at(0).toDouble(), tok.at(1).toDouble());
+}
+
+void NanovnaAnalyzer::finishMeasurementSegment()
+{
+    setParseState(WAIT_NANO_NO);
+    //qDebug() << "NanovnaAnalyzer::parse STOP";
+    emit completeMeasurement();
+    if (getContinuos()) {
+        startMeasure(m_fqFrom, m_fqTo, m_dotsNumber);
+    } else {
+        setIsMeasuring(false);
+        setContinuos(false);
+    }
+}
+
+void NanovnaAnalyzer::probeScanCapability()
+{
+    setParseState(WAIT_NANO_SCAN_PROBE);
+    sendData("scan\r\n");
+}
+
+void NanovnaAnalyzer::probeBinaryScanSupport()
+{
+    // Small throwaway 2-point sweep purely to see whether a binary-mode
+    // "scan" reply round-trips on this firmware -- the frequencies and
+    // point count don't matter, the result is discarded either way once
+    // the capability is known (see m_scanBinaryProbeInProgress below).
+    m_scanBinaryProbeInProgress = true;
+    quint16 mask = 0x01 | 0x02 | 0x04 | 0x80;
+    m_binarySentMask = mask;
+    m_binarySentPoints = 2;
+    m_binaryExpectedBytes = -1;
+
+    setParseState(WAIT_NANO_SCAN_BINARY);
+    sendData(QString("scan 1000000 2000000 2 %1\r\n").arg(mask));
+
+    if (m_scanProbeTimeoutTimer == nullptr) {
+        m_scanProbeTimeoutTimer = new QTimer(this);
+        m_scanProbeTimeoutTimer->setSingleShot(true);
+        connect(m_scanProbeTimeoutTimer, &QTimer::timeout, this, &NanovnaAnalyzer::onScanProbeTimeout);
+    }
+    m_scanProbeTimeoutTimer->start(3000);
+}
+
+void NanovnaAnalyzer::onScanProbeTimeout()
+{
+    if (!m_scanBinaryProbeInProgress)
+        return; // already resolved (parseBinaryScan() got there before the timer fired)
+
+    // No valid binary frame showed up in time -- "scan" itself is
+    // confirmed present (we already saw the ascii "usage:" reply), but
+    // its binary mode either isn't there or didn't answer as expected.
+    // Stay at AsciiOnly rather than hang waiting for bytes that may never
+    // come.
+    m_scanBinaryProbeInProgress = false;
+    m_scanSupport = ScanSupport::AsciiOnly;
+    m_binaryExpectedBytes = -1;
+    m_incomingBuffer.clear();
+    setParseState(WAIT_NANO_NO);
 }
 
 void NanovnaAnalyzer::stopMeasure()
@@ -344,6 +624,11 @@ bool NanovnaAnalyzer::connectAnalyzer()
     AnalyzerParameters* analyzer = AnalyzerParameters::byIndex(SelectionParameters::selected.modelIndex);
     if (analyzer == nullptr)
         return false;
+
+    // A fresh connection might be to a different device/firmware than
+    // last time -- don't carry over a stale capability verdict.
+    m_scanSupport = ScanSupport::Unknown;
+    m_scanBinaryProbeInProgress = false;
 
     QString _serialPortName = SelectionParameters::selected.id;
     bool connected = openComPort(_serialPortName);

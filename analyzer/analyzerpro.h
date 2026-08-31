@@ -100,6 +100,7 @@ signals:
     void measurementCompleteNano();
     void newData (RawData);
     void newS21Data (S21Data);
+    void newSParamPoint (SParamPoint); // real 2-port data, NanoVNA-only today -- bare passthrough from BaseAnalyzer, see its own comment
     void newUserData (RawData, UserData);
     void newUserDataHeader (QStringList);
     void newAnalyzerData (RawData);
