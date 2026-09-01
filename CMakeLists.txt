@@ -159,6 +159,7 @@ set(ANTSCOPE_SOURCES
     src/tdrscanpanel.cpp
     src/unitrequestdialog.cpp
     src/updatedialog.cpp
+    src/userguidedialog.cpp
 
     analyzer/analyzerdata.cpp
     analyzer/analyzerpro.cpp
@@ -225,6 +226,7 @@ set(ANTSCOPE_HEADERS
     src/tdrscanpanel.h
     src/unitrequestdialog.h
     src/updatedialog.h
+    src/userguidedialog.h
 
     analyzer/analyzerdata.h
     analyzer/analyzerparameters.h
@@ -634,6 +636,12 @@ endif()
 set(ANTSCOPE_RUNTIME_FILES
     shared/cables.txt
     shared/itu-regions-defaults.txt
+    # Was only reachable via the separate install(FILES docs/user-guide.md
+    # ...) rule below (packaging-only) -- Help > User Guide reads it via
+    # Settings::programDataPath(), same as cables.txt/itu-regions-
+    # defaults.txt above, which needs it staged here too so a dev build
+    # (never installed) finds it as well, not just a packaged one.
+    docs/user-guide.md
 )
 
 if(APPLE)

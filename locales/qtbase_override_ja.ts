@@ -35,5 +35,20 @@
         <source>Files of &amp;type:</source>
         <translation>ファイルの種類(&amp;T):</translation>
     </message>
+    <message>
+        <!--
+          Same bug, same date (2026-08-24, just not caught in the same
+          pass): qtbase_ja.ts only has "Look in:" (no ampersand), but the
+          real widget requests "&amp;Look in:" (confirmed via `strings`
+          against libQt6Widgets.so.6, same as "Files of &amp;type:" above).
+          Re-uses qtbase_ja.qm's own existing (correct) wording for
+          "アドレス:" ("Address:", the file dialog's actual label for this
+          field in Japanese), with the mnemonic appended as "(&amp;L)",
+          same parenthesized-Latin-accelerator CJK convention as the
+          "type" entry above, reusing English's own accelerator letter L.
+        -->
+        <source>&amp;Look in:</source>
+        <translation>アドレス(&amp;L):</translation>
+    </message>
 </context>
 </TS>

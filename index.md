@@ -64,16 +64,16 @@ AntScope2 is available directly from RigExpert at
 ## Supported devices
 
 AntScopeZ isn't limited to RigExpert's own analyzers -- NanoVNA and a
-some other brands are supported too. See
-[SUPPORTED_DEVICES.md](SUPPORTED_DEVICES.md) for the full list, and its
-(Disclaimer: most listed devices haven't been individually tested against
-this fork.)
+few other brands are supported too. See the [User Guide's Supported
+Devices section](docs/user-guide.md#supported-devices) for the full
+list. (Disclaimer: most listed devices haven't been individually tested
+against this fork.)
 
 ## Documentation
 
-- **[User Guide](docs/user-guide.md)** -- how to use AntScopeZ (TDR
-  scans, customized analyzer parameters, and more as it grows)
-- **[Supported Devices](SUPPORTED_DEVICES.md)** -- full device list
+- **[User Guide](docs/user-guide.md)** -- how to use AntScopeZ (the
+  full supported-device list, TDR scans, customized analyzer
+  parameters, and more as it grows)
 - **[Build Instructions](BUILDINFO.md)** -- building from source, Qt
   version notes, platform-specific detail
 - **[Changelog](CHANGELOG.md)** -- what's changed, release by release

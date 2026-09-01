@@ -32,6 +32,7 @@
 #include <qserialport.h>
 #include <markercomparisondialog.h>
 #include <tdrscandialog.h>
+#include <userguidedialog.h>
 
 
 // Absolute, non-user-facing ceiling -- how many points the app will ever
@@ -146,6 +147,7 @@ private:
 
     Measurements *m_measurements = nullptr;
     Settings *m_settingsDialog = nullptr;
+    UserGuideDialog *m_userGuideDialog = nullptr;
     // Non-modal, WA_DeleteOnClose "analyzer communications" QMessageBox --
     // see onAnalyzerError(). QPointer so a second error while one's still
     // up (repeated watchdog fires, several stitched segments all timing
@@ -450,6 +452,7 @@ private slots:
     void on_actionSettings_triggered();
     void on_actionExit_triggered();
     void on_actionAbout_triggered();
+    void on_actionUserGuide_triggered();
     void on_actionMarkerComparison_triggered();
     void on_actionTDRMeasurement_triggered();
     void on_measurmentsDeleteBtn_clicked();
