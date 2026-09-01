@@ -16,7 +16,7 @@ project(AntScopeZ
 # Clear it to an empty string right when 2.2.3 actually ships (matching
 # commit + `v2.2.3` tag, same pattern as `v2.2.2`/`v2.2.1`), then bump
 # PROJECT_VERSION and set this back to "-dev" to start the next cycle.
-set(ANTSCOPEZ_VER_SUFFIX "-dev")
+set(ANTSCOPEZ_VER_SUFFIX "")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

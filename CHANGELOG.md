@@ -11,6 +11,8 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-09-01
+
 ### Added
 
 - NanoVNA: real 2-port S11+S21 on every scan (was S11-only), plus an
@@ -31,8 +33,16 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
   outside a debug build, are now available at runtime behind Settings >
   Developer > Error Reporting & Logging > "Report Detailed Errors" (off
   by default).
+- Help > User Guide: a lightweight, non-modal in-app viewer for
+  `docs/user-guide.md` (no HTML rendering engine) -- the guide's own
+  self-links (jumping to a section) work.
 
 ### Changed
+
+- `SUPPORTED_DEVICES.md` merged into `docs/user-guide.md` as its own
+  section, so it's reachable from the in-app viewer above; the
+  standalone file/page is gone (index.md, README.md, and the GitHub
+  Pages nav all point at the merged section instead).
 
 - Markers table: docked under the plot tabs (a resizable splitter) as a
   normal themed table, instead of a floating semi-transparent popup.
