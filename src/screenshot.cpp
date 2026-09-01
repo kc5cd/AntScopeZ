@@ -5,6 +5,7 @@
 #include "printutils.h"
 #include "settings.h"
 #include "analyzer/ble_analyzer.h"
+#include "style.h"
 
 extern int g_showMessageBox(QWidget* parent, QMessageBox::Icon icon,
                             QString title, QString text,
@@ -24,6 +25,21 @@ Screenshot::Screenshot(QWidget *parent, int _model, int height, int width) :
     m_lcdWidth = width;
 
     m_popUp = new PopUp();
+    // Was a fixed near-black background/white text regardless of app theme
+    // -- fine on its own, but combined with the missing-semicolon bug in
+    // PopUp::init() (see its own comment), the white text never actually
+    // applied at all, so this was unreadable dark-on-dark no matter what.
+    // Follow the current Light/Dark/etc. theme instead, same colors the
+    // rest of the app's docked chrome uses. A fresh Screenshot dialog is
+    // constructed each time it's opened (see MainWindow::m_screenshot), so
+    // reading the theme once here (rather than also reacting to a live
+    // theme change while this dialog happens to be open) is enough.
+    Theme theme = Style::theme();
+    QColor popupBg = theme.windowBackground;
+    popupBg.setAlpha(220);
+    m_popUp->setBackgroundColor(popupBg);
+    m_popUp->setPenColor(theme.border);
+    m_popUp->setTextColor(theme.text.name());
 
     AnalyzerParameters* param = AnalyzerParameters::current();
     QString name = param == nullptr ? "" : param->name();

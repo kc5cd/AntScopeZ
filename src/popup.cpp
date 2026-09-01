@@ -62,7 +62,15 @@ void PopUp::init()
     connect(&animation, &QAbstractAnimation::finished, this, &PopUp::hide);
 
     label.setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    label.setStyleSheet("QLabel { color : " + m_textColor +
+    // Was missing the ';' right after m_textColor -- "color : whitemargin-
+    // top: 6px..." isn't a valid CSS color, so Qt silently dropped the
+    // whole color declaration and this always rendered in whatever the
+    // default QLabel text color happened to be, never the intended
+    // m_textColor. Against m_bgColor's own dark translucent background
+    // (see paintEvent()), that read as permanently unreadable dark-on-dark
+    // regardless of setTextColor() ever being called -- confirmed via the
+    // Screenshot "Image added to clipboard" notification, 2026-09-01.
+    label.setStyleSheet("QLabel { color : " + m_textColor + ";"
                         "margin-top: 6px;"
                         "margin-bottom: 6px;"
                         "margin-left: 10px;"
