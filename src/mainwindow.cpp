@@ -148,6 +148,21 @@ MainWindow::MainWindow(QWidget *parent) :
         QTimer::singleShot(0, this, [this]() { resizeWnd(); });
     });
 
+    // rightPane's own vertical splitter: plot tabs on top, the markers
+    // table docked underneath (see markersPanelContainer in mainwindow.ui,
+    // and Markers' constructor for what actually lands there). tabWidget
+    // absorbs resize space, same reasoning as the horizontal splitter
+    // above; the markers table only needs enough room to be usable, and
+    // grows via its own scrollbars beyond that (see MarkersPanel).
+    ui->splitterRightPane->setStretchFactor(0, 1);
+    ui->splitterRightPane->setStretchFactor(1, 0);
+    ui->splitterRightPane->setSizes({600, 160});
+    // Same deferred-resizeWnd() reasoning as the horizontal splitter above
+    // -- dragging this one resizes m_smithWidget's page too.
+    connect(ui->splitterRightPane, &QSplitter::splitterMoved, this, [this](int, int) {
+        QTimer::singleShot(0, this, [this]() { resizeWnd(); });
+    });
+
     qInfo() << "* 1 sslLibraryBuildVersion: " << QSslSocket::sslLibraryBuildVersionString();
     qInfo() << "* 2 supportsSsl: " << QSslSocket::supportsSsl();
     qInfo() << "* 3 sslLibraryVersion: " << QSslSocket::sslLibraryVersionString();
@@ -529,6 +544,12 @@ MainWindow::MainWindow(QWidget *parent) :
     if(m_markers == NULL)
     {
         m_markers = new Markers(this);
+        // Docks m_markers' MarkersPanel (built parentless, see Markers'
+        // constructor) into mainwindow.ui's right-pane splitter, below the
+        // plot tabs -- it used to be a top-level floating Qt::Tool window
+        // and never needed placing anywhere.
+        QVBoxLayout* markersPanelLayout = qobject_cast<QVBoxLayout*>(ui->markersPanelContainer->layout());
+        markersPanelLayout->addWidget(m_markers->markersHint());
         m_markers->setWidgets(m_swrWidget,
                               m_phaseWidget,
                               m_rsWidget,
@@ -538,8 +559,6 @@ MainWindow::MainWindow(QWidget *parent) :
                               m_s21Widget,
                               m_smithWidget);
         m_markers->setMeasurements(m_measurements);
-        connect(this, SIGNAL(focus(bool)), m_markers,SLOT(on_focus(bool)));
-        connect(this, SIGNAL(mainWindowPos(int,int)), m_markers,SLOT(on_mainWindowPos(int,int)));
         connect(this, SIGNAL(currentTab(QString)), m_markers, SLOT(on_currentTab(QString)));
         connect(this, SIGNAL(rescale()), m_markers, SLOT(rescale()));
         connect(m_analyzer, SIGNAL(newMeasurement(QString)), m_markers, SLOT(on_newMeasurement(QString)));
@@ -1088,22 +1107,22 @@ bool MainWindow::event(QEvent * e)
     }else if (e->type() == QEvent::WindowDeactivate)
     {
         // Only our own floating popups taking OS focus should be exempted
-        // here (they need real activation to receive clicks -- see
-        // MarkersPopUp::focusShow() and PopUp's WA_ShowWithoutActivating
-        // note). Checking "any app window is active" instead of
-        // "specifically one of our popups" used to also suppress this signal
-        // when Settings/Connect Analyzer/an Import file dialog opened, so the
-        // popup (Qt::WindowStaysOnTopHint) never got told to hide and sat on
-        // top of those dialogs eating their clicks.
+        // here (they need real activation to receive clicks -- see PopUp's
+        // WA_ShowWithoutActivating note). Checking "any app window is
+        // active" instead of "specifically one of our popups" used to also
+        // suppress this signal when Settings/Connect Analyzer/an Import
+        // file dialog opened, so the popup (Qt::WindowStaysOnTopHint)
+        // never got told to hide and sat on top of those dialogs eating
+        // their clicks.
         //
-        // m_measurements->graphHint() used to be checked here too -- dropped
-        // along with the getter itself once that panel was docked into
-        // mainwindow.ui (see setGraphHintWidgets()): a plain child widget has
-        // no WM identity of its own, so it can never be qApp->activeWindow()
-        // and never needed this exemption.
+        // m_measurements->graphHint() used to be checked here too, and
+        // m_markers->markersHint() (MarkersPopUp) the same once it was
+        // docked into mainwindow.ui as MarkersPanel -- both dropped here (the
+        // getters themselves are still used elsewhere): a plain child widget
+        // has no WM identity of its own, so it can never be
+        // qApp->activeWindow() and never needs this exemption.
         QWidget *active = qApp->activeWindow();
-        bool ownPopupActive = (m_markers && active == static_cast<QWidget*>(m_markers->markersHint())) ||
-                               (m_measurements && active == static_cast<QWidget*>(m_measurements->graphBriefHint()));
+        bool ownPopupActive = m_measurements && active == static_cast<QWidget*>(m_measurements->graphBriefHint());
         if (!ownPopupActive)
             emit focus(false);
     }else if (e->type() == QEvent::WindowStateChange)

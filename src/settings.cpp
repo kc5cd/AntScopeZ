@@ -5,7 +5,7 @@
 #include "analyzer/customanalyzer.h"
 #include "editbandsdialog.h"
 #include "mainwindow.h"
-#include "markerspopup.h"
+#include "markerspanel.h"
 #include "appregistrationdialog.h"
 #include "inforequestdialog.h"
 #include "style.h"
@@ -1415,7 +1415,7 @@ void Settings::initCustomizeTab()
 // Populates the Markers tab's DualListWidget from the current
 // [Markers]header ini value and wires it to write changes straight back --
 // the widget itself is generic (see duallistwidget.h) and knows nothing
-// about ini keys, MarkersHeaderColumn, or MarkersPopUp; all of that lives
+// about ini keys, MarkersHeaderColumn, or MarkersPanel; all of that lives
 // here, the one and only writer of the header ini key.
 void Settings::initMarkersTab()
 {
@@ -1442,8 +1442,8 @@ void Settings::initMarkersTab()
             available << idx;
 
     // Del/Marker/#/FQ (0..3) are the fixed columns every marker row always
-    // shows -- same boundary MarkersPopUp::createHeader() used to gate its
-    // per-column menu on (type > fieldFQ).
+    // shows -- same boundary MarkersPanel::createHeader() reads the ini
+    // header value against.
     const int frozen = MarkersHeaderColumn::fieldFQ + 1;
 
     ui->dualListMarkersColumns->setItemLists(headerLabels, available, selected, frozen);
@@ -1458,8 +1458,8 @@ void Settings::initMarkersTab()
         m_settings->endGroup();
         m_settings->sync();
 
-        // Live-refresh the popup immediately -- Settings is non-modal and
-        // MarkersPopUp is a long-lived sibling, not something that only
+        // Live-refresh the docked table immediately -- Settings is non-modal
+        // and MarkersPanel is a long-lived sibling, not something that only
         // picks up changes on next open.
         if (MainWindow::m_mainWindow && MainWindow::m_mainWindow->markers())
             MainWindow::m_mainWindow->markers()->markersHint()->reloadColumns();

@@ -52,9 +52,10 @@ void PopUp::init()
     setAttribute(Qt::WA_TranslucentBackground);
     // WA_ShowWithoutActivating kept this window from ever becoming the active
     // window, which on this window manager also meant it never received mouse
-    // input at all -- the pane could never be dragged (see the identical fix
-    // in MarkersPopUp). The resulting false "main window lost focus" is
-    // exempted in MainWindow::event() instead.
+    // input at all -- the pane could never be dragged (an identical fix used
+    // to live in the now-docked MarkersPopUp too, see git history). The
+    // resulting false "main window lost focus" is exempted in MainWindow::
+    // event() instead.
 
     animation.setTargetObject(this);
     animation.setPropertyName("popupOpacity");

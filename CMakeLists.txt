@@ -129,7 +129,7 @@ set(ANTSCOPE_SOURCES
     src/mainwindow_tools.cpp
     src/markercomparisondialog.cpp
     src/markers.cpp
-    src/markerspopup.cpp
+    src/markerspanel.cpp
     src/measurements.cpp
     src/measurements_autocal.cpp
     src/measurements_farend.cpp
@@ -202,7 +202,7 @@ set(ANTSCOPE_HEADERS
     src/mainwindow.h
     src/markercomparisondialog.h
     src/markers.h
-    src/markerspopup.h
+    src/markerspanel.h
     src/measurements.h
     src/modelesspopup.h
     src/Notification.h

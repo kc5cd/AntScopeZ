@@ -29,20 +29,14 @@ Markers::Markers(QObject *parent) : QObject(parent),
 
     if(m_markersHint == NULL)
     {
-        m_markersHint = new MarkersPopUp();
-        m_markersHint->setHiding(false);
-        if(m_markersHintEnabled && !m_markersList.isEmpty())
-            m_markersHint->focusShow();
-        // Not tr("Markers") -- this is an internal QSettings group name/
-        // comparison key (MarkersPopUp::setName()), never shown to the
-        // user. Translating it used to fork the ini group per UI language
-        // (e.g. a [Marcadores] group under Spanish instead of reusing
-        // [Markers]) and silently skip loading the saved popup position,
-        // since setName()'s own `m_name == "Markers"` check compares
-        // against the fixed English literal.
-        m_markersHint->setName("Markers");
+        // Parentless here -- MainWindow reparents it into mainwindow.ui's
+        // markersPanelContainer right after constructing this Markers
+        // object (see MainWindow's constructor). It used to be a top-level
+        // floating Qt::Tool window and never needed a parent at all.
+        m_markersHint = new MarkersPanel();
+        updateHintVisibility();
         connect(m_markersHint, SIGNAL(removeMarker(int)), SLOT(on_removeMarker(int)));
-        connect(m_markersHint, &MarkersPopUp::changeColumns, this, [&](){ repaint(); });
+        connect(m_markersHint, &MarkersPanel::changeColumns, this, [&](){ repaint(); });
         repaint();
     }
 }
@@ -253,35 +247,14 @@ void Markers::add()
 
     changeMarkersHint();
     redraw();
-    if(m_markersHintEnabled && !m_markersList.isEmpty()) {
-       m_markersHint->focusShow();
-    } else {
-        m_markersHint->setVisible(false);
-    }
+    updateHintVisibility();
     emit markersChanged();
 }
 
-void Markers::on_focus(bool focus)
+void Markers::updateHintVisibility()
 {
-    m_focus = focus;
-
-    // Deferred for the same reason as Measurements::on_focus()'s identical
-    // guard -- see the comment there. m_markersHint is the same kind of
-    // activatable top-level Qt::Tool popup (MarkersPopUp), shown inline here
-    // from inside MainWindow's own WindowActivate handling, which can race
-    // MainWindow for the WM's activation on cold start.
-    QTimer::singleShot(50, this, [this]() {
-        if(m_markersHint)
-        {
-            if(m_markersHintEnabled && m_focus && !m_markersList.isEmpty())
-            {
-                m_markersHint->focusShow();
-            }else
-            {
-                m_markersHint->focusHide();
-            }
-        }
-    });
+    if (m_markersHint)
+        m_markersHint->setVisible(m_markersHintEnabled);
 }
 
 void Markers::repaint()
@@ -307,7 +280,7 @@ QList<QList<QVariant>> Markers::updateInfo(QList<int> _columnTypes)
         if (count == 0) {
             // No scan yet -- still show the marker's own number/frequency
             // (known the instant it's placed) instead of the row simply
-            // not appearing. See MarkersPopUp::updateInfo()'s matching
+            // not appearing. See MarkersPanel::updateInfo()'s matching
             // rowCount fallback, which is what actually renders this row.
             info << emptyMarkerRow(fq0, n+1, _columnTypes);
             continue;
@@ -633,14 +606,6 @@ double Markers::interpolate(double fq1, double fq2, double fq3, double param1, d
     return param1 + (fq2-fq1)/(fq3-fq1) *(param2-param1);
 }
 
-void Markers::on_mainWindowPos(int x, int y)
-{
-    if(m_markersHint)
-    {
-        m_markersHint->MainWindowPos(x, y);
-    }
-}
-
 void Markers::on_currentTab(QString name)
 {
     m_currentTab = name;
@@ -710,16 +675,7 @@ void Markers::autoPlaceAtLowestSwr()
 void Markers::setMarkersHintEnabled(bool enabled)
 {
     m_markersHintEnabled = enabled;
-    if(m_markersHint)
-    {
-        if(m_markersHintEnabled && !m_markersList.isEmpty())
-        {
-            m_markersHint->focusShow();
-        }else
-        {
-            m_markersHint->setVisible(false);
-        }
-    }
+    updateHintVisibility();
 }
 
 bool Markers::getMarkersHintEnabled(void)
@@ -840,33 +796,25 @@ void Markers::on_removeMarker(int number)
     m_rpWidget->replot();
     m_rlWidget->replot();
     m_s21Widget->replot();
-    if (m_markersList.isEmpty()) {
-       m_markersHint->setVisible(false);
-    }
+    updateHintVisibility();
     emit markersChanged();
 }
 
 void Markers::on_translate()
 {
     if (m_markersHint != nullptr)
-    {
-        // See the comment on the other setName("Markers") call above --
-        // this is a settings-group key, not user-facing text.
-        m_markersHint->setName("Markers");
         m_markersHint->on_translate();
-    }
 }
 
 void Markers::changeColorTheme()
 {
-    // Text/background used to be driven by the app's Light/Dark theme here,
-    // independent of the plot's own chart-background -- same class of
-    // contrast bug fixed around the same time for Measurements'
-    // m_graphHint/m_graphBriefHint (both now retired or docked -- see
-    // measurements_popups.cpp). Row/header text and the popup's own backdrop
-    // both now track chart-background via updateLabelColors() instead.
-    if (m_markersHint != nullptr)
-        m_markersHint->updateLabelColors();
+    // m_markersHint used to need re-coloring here too, back when it tracked
+    // the plot's own chart-background instead of the app theme (same class
+    // of fix as Measurements' m_graphHint/m_graphBriefHint -- see
+    // measurements_popups.cpp) -- now it's a plain docked, normally-themed
+    // QTableWidget that qApp->setStyleSheet()/setPalette() (MainWindow::
+    // changeColorTheme()) already re-skins for free, same as every other
+    // table in the app.
 
     // Markers::create() only sets each line/text pair's color once, at
     // creation time -- a marker already on the chart when the theme (or

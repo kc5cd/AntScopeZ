@@ -4,7 +4,7 @@
 #include <QObject>
 #include <qcustomplot.h>
 #include <popup.h>
-#include <markerspopup.h>
+#include <markerspanel.h>
 #include <QSettings>
 #include <analyzer/analyzerparameters.h>
 #include <settings.h>
@@ -81,7 +81,7 @@ public:
     void on_translate();
     void changeColorTheme();
     void changeMarkersHint();
-    MarkersPopUp * markersHint() { return m_markersHint; }
+    MarkersPanel * markersHint() { return m_markersHint; }
     QList<QList<QVariant>> updateInfo(QList<int> _columnTypes);
     // Single marker, most recent measurement -- see definition in
     // markers.cpp for why this exists alongside updateInfo().
@@ -111,7 +111,7 @@ private:
 
     QVector <marker*> m_markersList;
 
-    MarkersPopUp * m_markersHint;
+    MarkersPanel * m_markersHint;
 
     QString m_currentTab;
 
@@ -121,8 +121,6 @@ private:
 
     Measurements *m_measurements;
 
-    bool m_focus;
-
     double interpolate(double fq1, double fq2, double fq3, double param1, double param2);
     // Row body shared by updateInfo() (all markers x all measurements) and
     // valuesForMarkerNumber() (one marker, most recent measurement only).
@@ -131,8 +129,16 @@ private:
     // read from -- unlike computeMarkerRow(), doesn't touch m_measurements
     // at all, so it's safe to call with zero measurements. Only fieldMarker/
     // fieldFQ are known this early; everything else comes back invalid,
-    // which MarkersPopUp::formatText() already renders as blank.
+    // which MarkersPanel::formatText() already renders as blank.
     QList<QVariant> emptyMarkerRow(double fq0, int markerNumber, const QList<int>& columnTypes);
+
+    // Single choke point for "should the docked panel be visible right
+    // now" -- markersHintEnabled alone (2026-09-01: was also gated on a
+    // marker existing, but that made the checkbox look broken -- checking
+    // it while the marker list was empty, e.g. right at launch, silently
+    // did nothing). The panel just shows empty, headers-only, until a
+    // marker is placed.
+    void updateHintVisibility();
 
 signals:
     // Emitted by add()/on_removeMarker() whenever the marker list itself
@@ -144,8 +150,6 @@ signals:
     void markersChanged();
 
 public slots:
-    void on_focus(bool focus);
-    void on_mainWindowPos(int x, int y);
     void on_currentTab(QString name);
     void on_newMeasurement(QString);
     void on_measurementComplete();

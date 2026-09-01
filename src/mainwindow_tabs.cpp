@@ -514,8 +514,11 @@ void MainWindow::changeColorTheme(int themeIndex)
         getCurrentPlot()->replot();
     if (m_measurements != nullptr)
         m_measurements->setBriefHintColor();
-    if (m_markers != nullptr && m_markers->markersHint() != nullptr)
-        m_markers->markersHint()->updateLabelColors();
+    // m_markers->markersHint()->updateLabelColors() used to be needed here
+    // too -- gone along with the method itself now that MarkersPanel is a
+    // plain docked, normally-themed QTableWidget; the qApp->setStyleSheet()/
+    // setPalette() calls above already re-skin it for free (see Markers::
+    // changeColorTheme()).
 }
 
 void MainWindow::refreshThemeMenu()
