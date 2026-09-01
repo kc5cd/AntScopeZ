@@ -3,7 +3,6 @@
 #include "popupindicator.h"
 #include "analyzer/customanalyzer.h"
 #include "analyzer/nanovna_analyzer.h"
-#include "Notification.h"
 #include "glwidget.h"
 #include "CustomPlot.h"
 #include "selectdevicedialog.h"
@@ -66,6 +65,16 @@ int g_analyzerMaxPoints = 1000;
 // developer/debug feature. Default off, matching pre-existing behavior for
 // anyone who never had -developer passed.
 bool g_extendedChartZoom = false;
+// "Analyzer timeout" (Settings > General) -- seconds a scan can go without
+// receiving a single data point before AnalyzerPro's watchdog treats it as
+// failed (device gone, or busy -- already held open by another program or
+// another AntScopeZ window) and surfaces an error instead of leaving the
+// busy indicator/wait cursor stuck forever. Restarts on every point
+// actually received, not just once at scan start, so it's "no progress for
+// N seconds," not "whole scan must finish in N seconds" -- a long, healthy
+// continuous sweep won't trip it. See AnalyzerPro's watchdog timer
+// (analyzer/analyzerpro.cpp).
+int g_analyzerTimeoutSec = 8;
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -281,6 +290,7 @@ MainWindow::MainWindow(QWidget *parent) :
     g_pointsWarnThreshold = m_settings->value("pointsWarnThreshold", 1000).toInt();
     g_analyzerMaxPoints = m_settings->value("analyzerMaxPoints", 1000).toInt();
     g_extendedChartZoom = m_settings->value("extendedChartZoom", false).toBool();
+    g_analyzerTimeoutSec = m_settings->value("analyzerTimeoutSec", 8).toInt();
     m_activeThemeIndex = m_settings->value("activeTheme", 0).toInt();
     m_settings->endGroup();
 
@@ -376,11 +386,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(this,SIGNAL(stopMeasure()), m_analyzer, SLOT(on_stopMeasure()));
     connect(this,&MainWindow::measureOneFq, m_analyzer,&AnalyzerPro::on_measureOneFq);
     connect(m_analyzer, &AnalyzerPro::signalMeasurementError, this, &MainWindow::onMeasurementError);
-    connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, [=] (const QString& error) {
-        QRect r = ui->tabWidget->rect();
-        QRect rr = QRect(40, 50, r.width()-80, 40);
-        Notification::showMessage(error, Qt::red, rr, 5000, m_mainWindow);
-    });
+    connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, &MainWindow::onAnalyzerError);
     // These QShortcuts are parented to `this` (MainWindow), so Qt's parent-child
     // ownership deletes them automatically when MainWindow is destroyed -- clang's
     // static analyzer doesn't model that ownership, hence the false "leak" warnings.
@@ -1040,6 +1046,7 @@ MainWindow::~MainWindow()
     m_settings->setValue("pointsWarnThreshold", g_pointsWarnThreshold);
     m_settings->setValue("analyzerMaxPoints", g_analyzerMaxPoints);
     m_settings->setValue("extendedChartZoom", g_extendedChartZoom);
+    m_settings->setValue("analyzerTimeoutSec", g_analyzerTimeoutSec);
     m_settings->endGroup();
 
     m_settings->beginGroup("Cable");

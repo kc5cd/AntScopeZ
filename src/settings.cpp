@@ -30,6 +30,7 @@ extern int g_pointsMax; // see mainwindow.cpp
 extern int g_pointsWarnThreshold; // see mainwindow.cpp
 extern int g_analyzerMaxPoints; // see mainwindow.cpp
 extern bool g_extendedChartZoom; // see mainwindow.cpp
+extern int g_analyzerTimeoutSec; // see mainwindow.cpp
 extern QString appendSpaces(const QString& number);
 int Settings::m_serialIndex = 0;
 bool Settings::m_licenseUpdateBlocked = false;
@@ -129,6 +130,7 @@ Settings::Settings(QWidget *parent) :
     ui->lineEditScanWarnThreshold->setText(QString::number(g_pointsWarnThreshold));
     ui->lineEditAnalyzerMaxPoints->setText(QString::number(g_analyzerMaxPoints));
     ui->checkBoxExtendedChartZoom->setChecked(g_extendedChartZoom);
+    ui->lineEdit_analyzerTimeout->setText(QString::number(g_analyzerTimeoutSec));
     m_settings->endGroup();
 
     // Debug Logging (Developer tab) -- deliberately NOT persisted to the
@@ -157,6 +159,13 @@ Settings::Settings(QWidget *parent) :
     connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, ui->debugLogBleShowPingsCheckBox, &QCheckBox::setEnabled);
     connect(ui->debugLogBleShowPingsCheckBox, &QCheckBox::clicked, DebugLog::setBleShowPings);
 
+    // Error Reporting & Logging -- same session-only/off-by-default
+    // convention as Debug Logging just above (see DebugLog::
+    // setDetailedErrorsEnabled()'s comment).
+    ui->checkBoxReportDetailedErrors->setChecked(false);
+    DebugLog::setDetailedErrorsEnabled(false);
+    connect(ui->checkBoxReportDetailedErrors, &QCheckBox::clicked, DebugLog::setDetailedErrorsEnabled);
+
     // "Data folder" -- the single UserDataDir every save/export/screenshot
     // dialog now defaults to (see FileDialog::userDataDir()), replacing the
     // old per-dialog remembered-last-path settings.
@@ -182,6 +191,7 @@ Settings::Settings(QWidget *parent) :
     });
 
     connect(ui->lineEdit_systemImpedance, &QLineEdit::editingFinished, this, &Settings::on_systemImpedance);
+    connect(ui->lineEdit_analyzerTimeout, &QLineEdit::editingFinished, this, &Settings::on_analyzerTimeoutFinished);
 
     connect(ui->lineEditScanPointsMax, &QLineEdit::editingFinished, this, &Settings::on_scanPointsMaxFinished);
     connect(ui->lineEditScanWarnThreshold, &QLineEdit::editingFinished, this, &Settings::on_scanWarnThresholdFinished);
@@ -1824,6 +1834,15 @@ void Settings::on_analyzerMaxPointsFinished()
     value = qBound(50, value, POINTS_MAX);
     ui->lineEditAnalyzerMaxPoints->setText(QString::number(value));
     g_analyzerMaxPoints = value;
+    emit paramsChanged();
+}
+
+void Settings::on_analyzerTimeoutFinished()
+{
+    int value = ui->lineEdit_analyzerTimeout->text().toInt();
+    value = qBound(1, value, 300);
+    ui->lineEdit_analyzerTimeout->setText(QString::number(value));
+    g_analyzerTimeoutSec = value;
     emit paramsChanged();
 }
 

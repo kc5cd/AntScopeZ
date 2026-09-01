@@ -6,6 +6,8 @@
 #include <QCheckBox>
 #include <QPushButton>
 #include <QShortcut>
+#include <QMessageBox>
+#include <QPointer>
 //#include <analyzer/analyzer.h>
 #include <analyzer/analyzerpro.h>
 #include <qcustomplot.h>
@@ -144,6 +146,12 @@ private:
 
     Measurements *m_measurements = nullptr;
     Settings *m_settingsDialog = nullptr;
+    // Non-modal, WA_DeleteOnClose "analyzer communications" QMessageBox --
+    // see onAnalyzerError(). QPointer so a second error while one's still
+    // up (repeated watchdog fires, several stitched segments all timing
+    // out, etc.) updates/re-raises the same box instead of piling up a
+    // stack of them; auto-nulls itself once the user dismisses it.
+    QPointer<QMessageBox> m_analyzerErrorBox;
     Export *m_exportDialog = nullptr;
     Markers *m_markers = nullptr;
     QSettings *m_settings = nullptr;
@@ -477,6 +485,7 @@ private slots:
     void on_importFinished(double _fqMin, double _fqMax);
     void onFullRange(bool);
     void onMeasurementError();
+    void onAnalyzerError(const QString& error);
     void on_tableWidgetMeasurmentsContextMenu(const QPoint& pos);
 
     // multi-tab

@@ -216,6 +216,7 @@ private slots:
     void on_fqMaxFinished();
     void on_PointsFinished();
     void on_systemImpedance();
+    void on_analyzerTimeoutFinished();
     void on_scanPointsMaxFinished();
     void on_scanWarnThresholdFinished();
     void on_analyzerMaxPointsFinished();

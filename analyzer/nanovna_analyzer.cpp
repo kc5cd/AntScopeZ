@@ -391,9 +391,17 @@ qint32 NanovnaAnalyzer::parseBinaryScan()
             } else {
                 // A real measurement's binary reply came back malformed --
                 // demote for next time and end this scan cleanly instead
-                // of silently returning wrong data.
+                // of silently returning wrong data. The mismatched mask/
+                // points values are the diagnostic data at hand -- cheap to
+                // include, previously just a silent beep+cancel with no
+                // message at all.
                 m_scanSupport = ScanSupport::AsciiOnly;
                 setIsMeasuring(false);
+                emit signalAnalyzerError(tr("NanoVNA binary scan reply didn't match the "
+                                             "request (mask %1 vs %2, points %3 vs %4) -- "
+                                             "falling back to ASCII scanning.")
+                                              .arg(m_binaryMask).arg(m_binarySentMask)
+                                              .arg(m_binaryPoints).arg(m_binarySentPoints));
                 emit signalMeasurementError();
             }
             setParseState(WAIT_NANO_NO);

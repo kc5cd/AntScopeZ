@@ -19,6 +19,7 @@ extern int g_showMessageBox(QWidget* parent, QMessageBox::Icon icon,
                             QMessageBox::StandardButtons buttons = QMessageBox::Ok,
                             QMessageBox::StandardButton defaultButton = QMessageBox::NoButton);
 extern int g_analyzerMaxPoints; // see mainwindow.cpp
+extern int g_analyzerTimeoutSec; // see mainwindow.cpp
 
 AnalyzerPro::AnalyzerPro(QObject *parent) : QObject(parent),
     m_baseAnalyzer(nullptr),
@@ -38,6 +39,10 @@ AnalyzerPro::AnalyzerPro(QObject *parent) : QObject(parent),
     AnalyzerParameters::fill();
     // TODO
     //on_comAnalyzerDisconnected(); // create hidAnalyzer
+
+    m_watchdogTimer = new QTimer(this);
+    m_watchdogTimer->setSingleShot(true);
+    connect(m_watchdogTimer, &QTimer::timeout, this, &AnalyzerPro::on_watchdogTimeout);
 }
 
 AnalyzerPro::~AnalyzerPro()
@@ -307,6 +312,34 @@ void AnalyzerPro::advanceStitchSegmentIfNeeded()
     }
 }
 
+void AnalyzerPro::kickWatchdog()
+{
+    m_watchdogTimer->start(qMax(1, g_analyzerTimeoutSec) * 1000);
+}
+
+void AnalyzerPro::stopWatchdog()
+{
+    m_watchdogTimer->stop();
+}
+
+void AnalyzerPro::on_watchdogTimeout()
+{
+    // Can race a scan that finished/was cancelled in the same tick the
+    // timer was already queued to fire -- stopWatchdog() should have caught
+    // it first, but this is the backstop.
+    if (!m_isMeasuring)
+        return;
+
+    emit signalAnalyzerError(tr("Analyzer communications error. Please check device, "
+                                 "cables, configuration, and ensure no other process "
+                                 "is using it."));
+    // Reuses the exact cleanup every device backend's own protocol-level
+    // errors already go through (MainWindow::onMeasurementError() -> Esc ->
+    // AnalyzerPro::on_stopMeasure()) -- see signalMeasurementError()'s other
+    // emit sites (hid_analyzer.cpp/com_analyzer.cpp/nanovna_analyzer.cpp).
+    emit signalMeasurementError();
+}
+
 void AnalyzerPro::on_measure (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
 {
     //qDebug() << "AnalyzerPro::on_measure()";
@@ -329,6 +362,7 @@ void AnalyzerPro::on_measure (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->setIsFRXMode(true);
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
+            kickWatchdog();
             return;
         }
     }
@@ -352,6 +386,7 @@ void AnalyzerPro::on_measureS21 (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->setIsS21Mode(true);
             m_baseAnalyzer->startMeasure(fqFrom, fqTo, m_dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
+            kickWatchdog();
             return;
         }
     }
@@ -369,6 +404,7 @@ void AnalyzerPro::on_measureContinuous(qint64 fqFrom, qint64 fqTo, qint32 dotsNu
         {
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
+            kickWatchdog();
             return;
         }
     }
@@ -389,6 +425,7 @@ void AnalyzerPro::on_measureUser (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->setIsFRXMode(false);
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
+            kickWatchdog();
             return;
         }
     }
@@ -414,6 +451,7 @@ void AnalyzerPro::on_measureOneFq(QWidget* /*parent*/, qint64 fqFrom, qint32 dot
     {
         m_baseAnalyzer->setIsFRXMode(true);
         m_baseAnalyzer->startMeasureOneFq(fqFrom,m_dotsNumber);
+        kickWatchdog();
     }
 }
 
@@ -429,6 +467,7 @@ void AnalyzerPro::on_stopMeasure()
     // second marker every time Settings was opened. Only emit it if a
     // measurement was genuinely in progress.
     bool wasMeasuring = m_isMeasuring;
+    stopWatchdog();
     PopUpIndicator::setIndicatorVisible(false);
     setIsMeasuring(false);
     m_chartCounter = 0;
@@ -464,7 +503,28 @@ void AnalyzerPro::makeScreenshot()
 
 void AnalyzerPro::on_newData(RawData _rawData)
 {
+    // Leftover/stale data from a scan that's already been stopped (Esc,
+    // re-clicking Single/Continuous, the watchdog) -- on_stopMeasure()
+    // already ran the full one-time completion sequence (including its own
+    // emit measurementComplete()) synchronously when that happened. Several
+    // devices (confirmed: BLE, see BleAnalyzer::stopMeasure()) have no real
+    // wire command to abort a sweep already in flight, so bytes for it keep
+    // arriving here regardless. Without this guard, the block below re-runs
+    // -- and re-emits measurementComplete() -- on *every single one* of
+    // those leftover points, since nothing else ever makes m_isMeasuring
+    // true again until a fresh scan starts. Each spurious emit reaches
+    // MainWindow::on_measurementComplete() same as a real completion does,
+    // which calls Markers::autoPlaceAtLowestSwr() every time -- confirmed
+    // 2026-09-01 live (BLE, Single scan interrupted mid-sweep -> 5 markers,
+    // one per leftover point until every slot filled, instead of the one
+    // real completion). Ignore it outright instead of half-processing it.
+    if (!m_isMeasuring)
+        return;
+
     //qDebug() << "AnalyzerPro::on_newData" << _rawData.fq << _rawData.r << _rawData.x << (m_chartCounter) << (m_dotsNumber);
+    // A point actually arrived -- the device (and whatever's holding it) is
+    // alive and responding, so push the "no progress" deadline back out.
+    kickWatchdog();
     if (m_getAnalyzerData) {
         emit newAnalyzerData (_rawData);
     } else {
@@ -478,6 +538,7 @@ void AnalyzerPro::on_newData(RawData _rawData)
     if(m_chartCounter > finNum || !m_isMeasuring)
     {
         //qDebug() << "AnalyzerPro::on_newData COMPLETE";
+        stopWatchdog();
         m_chartCounter = 0;
         setIsMeasuring(false);
         PopUpIndicator::setIndicatorVisible(false);
@@ -493,6 +554,11 @@ void AnalyzerPro::on_newData(RawData _rawData)
 
 void AnalyzerPro::on_newS21Data(S21Data _s21Data)
 {
+    // See on_newData()'s own comment -- same leftover-data-after-stop guard.
+    if (!m_isMeasuring)
+        return;
+
+    kickWatchdog(); // see on_newData()'s comment
     emit newS21Data (_s21Data);
 
     // ???? if(m_chartCounter >= m_dotsNumber || !m_isMeasuring)
@@ -500,6 +566,7 @@ void AnalyzerPro::on_newS21Data(S21Data _s21Data)
     if(m_chartCounter > finNum || !m_isMeasuring)
     {
         qDebug() << "AnalyzerPro::on_newS21Data COMPLETE";
+        stopWatchdog();
         m_chartCounter = 0;
         setIsMeasuring(false);
         PopUpIndicator::setIndicatorVisible(false);
@@ -514,9 +581,15 @@ void AnalyzerPro::on_newS21Data(S21Data _s21Data)
 
 void AnalyzerPro::on_newUserData(RawData _rawData, UserData _userData)
 {
+    // See on_newData()'s own comment -- same leftover-data-after-stop guard.
+    if (!m_isMeasuring)
+        return;
+
+    kickWatchdog(); // see on_newData()'s comment
     advanceStitchSegmentIfNeeded();
     if(++m_chartCounter == m_dotsNumber+1 || !m_isMeasuring)
     {
+        stopWatchdog();
         emit newUserData (_rawData, _userData);
         setIsMeasuring(false);
         m_chartCounter = 0;
@@ -691,6 +764,7 @@ void AnalyzerPro::on_measureCalib(int dotsNumber)
     if(m_baseAnalyzer != nullptr)
     {
         m_baseAnalyzer->startMeasure(minFq_, maxFq_, dotsNumber);
+        kickWatchdog();
     }
 }
 

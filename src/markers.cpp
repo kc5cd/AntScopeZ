@@ -47,10 +47,19 @@ Markers::~Markers()
     m_settings->setValue("markersHintEnabled", m_markersHintEnabled);
     m_settings->endGroup();
 
-    if(m_markersHint)
-    {
-        delete m_markersHint;
-    }
+    // Was: explicit `delete m_markersHint;` here, correct back when it was
+    // a parentless top-level Qt::Tool popup this was the sole owner of. Now
+    // that it's docked (MainWindow reparents it into mainwindow.ui's
+    // markersPanelContainer right after constructing this object -- see
+    // MainWindow's constructor), Qt's own widget-tree teardown owns and
+    // deletes it instead: MainWindow::~MainWindow() destroys the whole `ui`
+    // widget tree (markersPanelContainer included) before this Markers
+    // object -- a plain QObject parented directly to MainWindow, not part
+    // of that widget tree -- gets destroyed in turn. Deleting it again here
+    // was a double-delete on an already-freed pointer (m_markersHint isn't
+    // a QPointer, so it doesn't know the widget tree beat it to it) --
+    // confirmed 2026-09-01 via a segfault in QObjectPrivate::deleteChildren()
+    // unwinding straight into this line.
 }
 
 void Markers::setWidgets(QCustomPlot * swr, QCustomPlot * phase, QCustomPlot * rs, QCustomPlot * rp,
