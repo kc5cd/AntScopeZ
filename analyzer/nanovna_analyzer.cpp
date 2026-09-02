@@ -209,8 +209,21 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                         sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
                         sp.s21 = s21;
                         sp.s22 = std::complex<double>(0,0);
-                        emit newSParamPoint(sp);
                         m_fqCursor++;
+                        // Same guard as the S11 pass above (WAIT_NANO_DATA's
+                        // "if (raw.fq > 0)") and for the same reason: the
+                        // firmware echoes "data 1" back as its own line
+                        // before the real output, and that echo lands right
+                        // here as cursor 0's "data" -- paired against
+                        // m_listFQ[0], which is the *other* echo ("frequencies"
+                        // itself, non-numeric) left over from WAIT_NANO_FQ.
+                        // toDouble() on that yields fq<=0, not a real point.
+                        // m_fqCursor still advances unconditionally above --
+                        // that's what keeps this pass in sync with the S11
+                        // pass's own identical one-bogus-entry absorption.
+                        if (fq > 0) {
+                            emit newSParamPoint(sp);
+                        }
                     }
                 }
             }
@@ -296,7 +309,28 @@ void NanovnaAnalyzer::startMeasure(qint64 fqFrom, qint64 fqTo, int dotsNumber, b
 {
     //qDebug() << "NanovnaAnalyzer::startMeasure" << fqFrom << fqTo << dotsNumber;
     if (getParseState() != WAIT_NANO_NO) {
-        //qDebug() << "NanovnaAnalyzer::startMeasure: busy, state=" << getParseState();
+        // First-use race, confirmed via gdb 2026-09-02: right after connect,
+        // the capability-probe handshake (info -> "scan"/binary support
+        // checks, WAIT_NANO_VER..WAIT_NANO_SCAN_BINARY) can still be in
+        // flight -- even, in the tightest case, before it's started at all
+        // (parseState still BaseAnalyzer's raw constructed default). A scan
+        // request landing in that window used to be silently dropped right
+        // here, while AnalyzerPro::on_measure() had *already* committed to
+        // "measuring" (busy indicator shown, watchdog armed, a new
+        // Measurements row created) -- left stuck until the user noticed
+        // and pressed Single again, which its own AnalyzerPro::m_isMeasuring
+        // bookkeeping then misread as Stop rather than Start, costing a
+        // *second* extra click to actually recover.
+        // Retry shortly instead of dropping it -- the handshake is a
+        // handful of fast serial round-trips (sub-second on every device
+        // tested), so this settles on its own almost immediately. Unbounded
+        // by design: AnalyzerPro's own scan-timeout watchdog (already
+        // running from the moment this measurement was requested) is the
+        // backstop if the device is genuinely wedged, same as it is for any
+        // other stuck scan -- no need for a second, duplicate timeout here.
+        QTimer::singleShot(50, this, [this, fqFrom, fqTo, dotsNumber, frx]() {
+            startMeasure(fqFrom, fqTo, dotsNumber, frx);
+        });
         return;
     }
     Q_UNUSED (frx)
@@ -449,6 +483,18 @@ qint32 NanovnaAnalyzer::parseBinaryScan()
 
 void NanovnaAnalyzer::emitPoint(double fqMHz, std::complex<double> s11, std::complex<double> s21)
 {
+    // Same reasoning as WAIT_NANO_DATA_S21's guard above: the firmware
+    // echoes the sent "scan ..." command back as its own line before the
+    // real per-point output, and that echo line still parses as 5+ tokens
+    // (parseAsciiScanLine's own malformed/short-line check doesn't catch
+    // it), just with a non-numeric first token -- toDouble() on "scan"
+    // silently yields 0 (parseBinaryScan's freqHz starts zero-initialized
+    // for the same underlying non-data-line case). A real sweep point
+    // never legitimately has fq<=0, so drop it here rather than in every
+    // caller.
+    if (fqMHz <= 0)
+        return;
+
     double re = s11.real(), im = s11.imag();
     RawData raw;
     raw.fq = fqMHz;
