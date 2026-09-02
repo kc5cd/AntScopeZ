@@ -1290,7 +1290,13 @@ void MainWindow::setWidgetsSettings()
      //| Qt::Vertical | Qt::Horizontal
     m_swrWidget->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
     m_swrWidget->axisRect()->setRangeZoom(Qt::Horizontal);// | Qt::Vertical);
-    m_swrWidget->axisRect()->setRangeDrag(Qt::Horizontal | Qt::Vertical);
+    // Horizontal only -- SWR's Y-axis is meant to stay anchored to its
+    // MIN_SWR..MAX_SWR (1-10) range; the real Y-zoom feature is Ctrl+scroll
+    // (handled separately in mainwindow_mouse.cpp), not this axis-rect
+    // interaction. Leaving Qt::Vertical here let a plain click-drag
+    // anywhere on the chart pan the Y range around within that clamp,
+    // which read as the scale randomly shifting.
+    m_swrWidget->axisRect()->setRangeDrag(Qt::Horizontal);
     clampAxisRange(m_swrWidget->xAxis, 0, 10000000);
     clampAxisRange(m_swrWidget->yAxis, MIN_SWR, MAX_SWR);
     // QCPAxis's default number format ('g', see its ctor) switches to
