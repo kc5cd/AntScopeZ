@@ -11,6 +11,14 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+### Added
+
+- Dev-only: Connect Analyzer's COM list offers a "NanoVNA (dev emulator)"
+  entry, pointing at a companion emulator app
+  (`~/QT6Projects/NanoVnaEmulator`) over a local pty -- shown only while
+  that emulator is actually running (checks for its symlink at
+  `/tmp/nanovna-emulator`), invisible otherwise.
+
 ## [2.2.3] - 2026-09-01
 
 ### Added

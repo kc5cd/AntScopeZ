@@ -5,11 +5,21 @@
 #include "ble_analyzer.h"
 #include "style.h"
 
+#include <QFileInfo>
 
 extern int g_showMessageBox(QWidget* parent, QMessageBox::Icon icon,
                             QString title, QString text,
                             QMessageBox::StandardButtons buttons = QMessageBox::Ok,
                             QMessageBox::StandardButton defaultButton = QMessageBox::NoButton);
+// Dev-only stand-in for a real NanoVNA: a Qt6 GUI app
+// (~/QT6Projects/NanoVnaEmulator) that speaks the classic NanoVNA ASCII
+// shell / binary scan protocol over a Linux pty, symlinked to this fixed
+// path so it doesn't move between runs. Offered in the Connect Analyzer
+// dialog purely based on whether that symlink currently resolves to
+// something live (see onScan() below) -- no separate flag needed, since a
+// normal machine will essentially never have this exact path in use for
+// anything else, and it's invisible the instant the emulator isn't running.
+static const QString kNanoVnaEmulatorPath = QStringLiteral("/tmp/nanovna-emulator");
 // static
 SelectionParameters SelectionParameters::selected;
 
@@ -242,8 +252,13 @@ void SelectDeviceDialog::onScan(ReDeviceInfo::InterfaceType type)
         ui->tableWidget->horizontalHeaderItem(1)->setText(tr("Port name"));
         QList<ReDeviceInfo> list = ReDeviceInfo::availableDevices(ReDeviceInfo::Serial);
         NanovnaAnalyzer::detectPorts();
+        // QFileInfo::exists() follows the symlink -- true only while the
+        // emulator process is actually alive and holding its pty open
+        // (dangling symlink / nothing running both read as false), so this
+        // is a real "is it running" check, not just "did it ever exist".
+        bool devEmulatorAvailable = QFileInfo::exists(kNanoVnaEmulatorPath);
         int bluetooth_rows = 6;
-        int rows = list.size() + NanovnaAnalyzer::portsCount() + bluetooth_rows;
+        int rows = list.size() + NanovnaAnalyzer::portsCount() + bluetooth_rows + (devEmulatorAvailable ? 1 : 0);
         ui->tableWidget->setRowCount(rows);
         int row = 0;
         foreach (const ReDeviceInfo &info, list)
@@ -280,6 +295,15 @@ void SelectDeviceDialog::onScan(ReDeviceInfo::InterfaceType type)
             ui->tableWidget->setItem(row, 0, item);
 
             item = new QTableWidgetItem(info.portName().trimmed());
+            ui->tableWidget->setItem(row, 1, item);
+            row++;
+        }
+        if (devEmulatorAvailable) {
+            QTableWidgetItem* item = new QTableWidgetItem(QStringLiteral("NanoVNA (dev emulator)"));
+            item->setData(Qt::UserRole+1, (int)ReDeviceInfo::NANO);
+            ui->tableWidget->setItem(row, 0, item);
+
+            item = new QTableWidgetItem(kNanoVnaEmulatorPath);
             ui->tableWidget->setItem(row, 1, item);
             row++;
         }
