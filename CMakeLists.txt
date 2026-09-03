@@ -846,16 +846,20 @@ if(WIN32)
     # had them where programDataPath() looks -- confirmed live 2026-09-03:
     # "Can't open file: C:/ProgramData/AntScopeZ/cables.txt" opening
     # Settings on an installed (well, staged-but-not-actually-installed)
-    # build. install(DESTINATION) accepts an absolute path directly,
-    # bypassing CMAKE_INSTALL_PREFIX, so this needs no new mechanism --
-    # just a second copy of the same files at the path the app actually
-    # reads them from. The installer's uninstaller must remove this
-    # directory too (see the NSIS CPack config below) since it sits
-    # outside the tracked install prefix the generated uninstaller
-    # otherwise cleans up automatically.
-    install(FILES ${ANTSCOPE_RUNTIME_FILES}
-        DESTINATION "C:/ProgramData/AntScopeZ"
-    )
+    # build.
+    #
+    # This is NOT done as a second install(FILES DESTINATION <absolute>)
+    # rule here -- tried that first, but CPack's staged-install step sets
+    # CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION and hard-fails on any
+    # absolute destination (a real, correct safety check: a CPack package
+    # is meant to be relocatable, and "write outside the package root" is
+    # exactly what that check exists to catch). ProgramData is
+    # legitimately outside the package root by design here, so the copy
+    # belongs in the installer's own script instead -- see
+    # CPACK_NSIS_EXTRA_INSTALL_COMMANDS below, which copies these same
+    # source files to $PROGRAMDATA\AntScopeZ at install time. (The
+    # uninstaller removes that directory too -- see
+    # CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS.)
 
     # ftd2xx.dll is copied next to the binary by the POST_BUILD custom_command
     # above for a dev/debug build, but that step only touches the build tree
@@ -1194,15 +1198,58 @@ if(WIN32)
     set(CPACK_PACKAGE_EXECUTABLES "AntScopeZ" "AntScopeZ")
     # A GUI app has no business modifying the user's PATH.
     set(CPACK_NSIS_MODIFY_PATH OFF)
-    # The ProgramData install(FILES) rule above (see its own comment) puts
-    # cables.txt/itu-regions-defaults.txt/user-guide.md outside the tracked
-    # install prefix, so CPack's default generated uninstaller -- which only
-    # removes files it installed under that prefix -- would never clean it
-    # up. RMDir /r here is scoped to exactly the one directory that rule
-    # created; it must never be broadened to touch %APPDATA% (the user's
-    # own settings/calibration data, untouched by design -- see this
-    # plan's own verification step).
-    set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "RMDir /r \\\"$PROGRAMDATA\\\\AntScopeZ\\\"")
+    # cables.txt/itu-regions-defaults.txt/user-guide.md need to land in
+    # C:\ProgramData\AntScopeZ -- the one place Settings::programDataPath()
+    # (src/settings.cpp) actually looks on Windows (see the comment on the
+    # WIN32 install(FILES) block above for the full "why", including why
+    # this can't just be a second install(FILES DESTINATION <absolute>)
+    # rule: CPack hard-fails on absolute install destinations). Doing the
+    # copy as raw NSIS script instead, reading straight from the source
+    # tree the same way CPACK_NSIS_MUI_ICON above already does.
+    #
+    # Deliberately unquoted: CPack's own substitution for this variable
+    # replaces literal `"` characters with `;` (NSIS's line-comment
+    # marker) before inserting it into the generated script -- confirmed
+    # by hitting exactly that mangling ("CreateDirectory ;$PROGRAMDATA...;"
+    # -> "CreateDirectory expects 1 parameters, got 0", since `;` ate the
+    # rest of the line as a comment). NSIS only requires quoting a path
+    # that contains spaces; none of these do, so omitting quotes entirely
+    # sidesteps the mangling rather than fighting it.
+    #
+    # $PROGRAMDATA is NOT a built-in NSIS path variable (confirmed: NSIS
+    # 3.12 warns "unknown variable/constant" and silently treats it as
+    # literal text) -- the actual idiom is SetShellVarContext all, which
+    # makes $APPDATA resolve to CSIDL_COMMON_APPDATA (the real
+    # C:\ProgramData) instead of the default per-user roaming AppData.
+    # Restored to `current` afterward so nothing later in the generated
+    # script inherits the "all users" context unexpectedly.
+    #
+    # NSIS's File command also flatly rejects forward-slash paths
+    # ("no files found", confirmed by isolating it in a standalone .nsi --
+    # CMAKE_CURRENT_SOURCE_DIR is forward-slash-style) -- file(TO_NATIVE_PATH)
+    # converts each to backslash form first.
+    file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/shared/cables.txt" ANTSCOPE_NSIS_CABLES_PATH)
+    file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/shared/itu-regions-defaults.txt" ANTSCOPE_NSIS_ITU_PATH)
+    file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/docs/user-guide.md" ANTSCOPE_NSIS_GUIDE_PATH)
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
+        "SetShellVarContext all
+        CreateDirectory $APPDATA\\AntScopeZ
+        SetOutPath $APPDATA\\AntScopeZ
+        File ${ANTSCOPE_NSIS_CABLES_PATH}
+        File ${ANTSCOPE_NSIS_ITU_PATH}
+        File ${ANTSCOPE_NSIS_GUIDE_PATH}
+        SetShellVarContext current"
+    )
+    # Mirror image of the install commands above -- removes exactly the one
+    # directory they created. Must never be broadened to touch %APPDATA%
+    # (the user's own settings/calibration data, untouched by design -- see
+    # this plan's own verification step). Unquoted/SetShellVarContext for
+    # the same reasons as the install commands above.
+    set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
+        "SetShellVarContext all
+        RMDir /r $APPDATA\\AntScopeZ
+        SetShellVarContext current"
+    )
 
     include(CPack)
 endif()
