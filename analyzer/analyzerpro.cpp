@@ -579,6 +579,19 @@ void AnalyzerPro::on_newS21Data(S21Data _s21Data)
     m_chartCounter++;
 }
 
+void AnalyzerPro::on_newSParamPoint(SParamPoint sp)
+{
+    // Same leftover-data-after-stop guard as on_newData()/on_newS21Data(),
+    // but deliberately not touching m_chartCounter/watchdog/completion --
+    // every point that carries S-param data also arrives via newData()
+    // (see NanovnaAnalyzer::parse()/emitPoint()), so on_newData() already
+    // owns end-of-scan tracking for it; this is purely supplementary data
+    // riding along the same point.
+    if (!m_isMeasuring)
+        return;
+    emit newSParamPoint(sp);
+}
+
 void AnalyzerPro::on_newUserData(RawData _rawData, UserData _userData)
 {
     // See on_newData()'s own comment -- same leftover-data-after-stop guard.
@@ -869,7 +882,7 @@ void AnalyzerPro::connectSignals()
     connect(m_baseAnalyzer, &BaseAnalyzer::signalMeasurementError, this, &AnalyzerPro::signalMeasurementError);
     connect(m_baseAnalyzer, &BaseAnalyzer::newData,this,&AnalyzerPro::on_newData);
     connect(m_baseAnalyzer, &BaseAnalyzer::newS21Data,this, &AnalyzerPro::on_newS21Data);
-    connect(m_baseAnalyzer, &BaseAnalyzer::newSParamPoint, this, &AnalyzerPro::newSParamPoint); // bare passthrough -- deliberately not touching m_chartCounter
+    connect(m_baseAnalyzer, &BaseAnalyzer::newSParamPoint, this, &AnalyzerPro::on_newSParamPoint);
     connect(m_baseAnalyzer, &BaseAnalyzer::newUserData,this, &AnalyzerPro::on_newUserData);
     connect(m_baseAnalyzer,&BaseAnalyzer::newUserDataHeader,this, &AnalyzerPro::on_newUserDataHeader);
     connect(m_baseAnalyzer, &BaseAnalyzer::analyzerDataStringArrived,this, &AnalyzerPro::on_analyzerDataStringArrived);

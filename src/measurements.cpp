@@ -1474,7 +1474,8 @@ void Measurements::on_newS21Data(S21Data _s21Data)
 
 void Measurements::on_newSParamPoint(SParamPoint sp)
 {
-    if (m_measurements.isEmpty())
+    // See on_newData()'s own comment -- same leftover-data-after-stop guard.
+    if (m_interrupted || m_measurements.isEmpty())
         return;
 
     measurement& mm = m_measurements.last();

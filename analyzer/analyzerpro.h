@@ -115,7 +115,7 @@ signals:
     void measurementCompleteNano();
     void newData (RawData);
     void newS21Data (S21Data);
-    void newSParamPoint (SParamPoint); // real 2-port data, NanoVNA-only today -- bare passthrough from BaseAnalyzer, see its own comment
+    void newSParamPoint (SParamPoint); // real 2-port data, NanoVNA-only today -- guarded passthrough, see on_newSParamPoint()
     void newUserData (RawData, UserData);
     void newUserDataHeader (QStringList);
     void newAnalyzerData (RawData);
@@ -150,6 +150,7 @@ public slots:
     void on_stopMeasure();
     void on_newData(RawData _rawData);
     void on_newS21Data(S21Data _s21Data);
+    void on_newSParamPoint(SParamPoint sp);
     void on_newUserData(RawData,UserData);
     void on_newUserDataHeader(QStringList);
     void on_analyzerDataStringArrived(QString str);
