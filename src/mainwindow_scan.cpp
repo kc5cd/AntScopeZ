@@ -634,8 +634,11 @@ void MainWindow::on_measurementComplete()
         ui->continuousStartBtn->setChecked(false);
         ui->fullBtn->setEnabled(true);
         ui->fullBtn->setChecked(true);
-        m_measurements->on_measurementComplete();
-        m_markers->autoPlaceAtLowestSwr();
+        // Skip autoPlaceAtLowestSwr() if the scan ended with no points --
+        // on_measurementComplete() already deleted the empty row, so
+        // last() now refers to a previous, unrelated measurement.
+        if (!m_measurements->on_measurementComplete())
+            m_markers->autoPlaceAtLowestSwr();
         m_bInterrupted = true;
         ui->measurmentsDeleteBtn->setEnabled(true);
         ui->measurmentsClearBtn->setEnabled(true);
@@ -703,8 +706,11 @@ void MainWindow::on_measurementCompleteNano()
     } else { // single mode
         ui->singleStart->setChecked(false);
         ui->continuousStartBtn->setChecked(false);
-        m_measurements->on_measurementComplete();
-        m_markers->autoPlaceAtLowestSwr();
+        // Skip autoPlaceAtLowestSwr() if the scan ended with no points --
+        // on_measurementComplete() already deleted the empty row, so
+        // last() now refers to a previous, unrelated measurement.
+        if (!m_measurements->on_measurementComplete())
+            m_markers->autoPlaceAtLowestSwr();
         m_bInterrupted = true;
         ui->measurmentsDeleteBtn->setEnabled(true);
         ui->measurmentsClearBtn->setEnabled(true);

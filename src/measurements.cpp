@@ -1798,7 +1798,7 @@ void Measurements::on_impedanceChanged(double _z0)
     }
 }
 
-void Measurements::on_measurementComplete()
+bool Measurements::on_measurementComplete()
 {
     m_previousI = 0;
     m_measuringInProgress = false;
@@ -1815,10 +1815,12 @@ void Measurements::on_measurementComplete()
     // completion, NanoVNA single-scan completion) -- not reached by
     // Continuous mode's per-tick continuation, which never calls this
     // until it's stopped, by which point its row already has whatever data
-    // it accumulated across ticks.
+    // it accumulated across ticks. Callers use the return value to skip
+    // any further action (e.g. autoPlaceAtLowestSwr()) that assumes a real,
+    // just-finished row still exists.
     if (!isEmpty() && last()->dataRX.isEmpty()) {
         deleteRow(m_measurements.length() - 1);
-        return;
+        return true;
     }
 
     // Fill in the just-finished scan's actual point count directly, rather
@@ -1829,6 +1831,7 @@ void Measurements::on_measurementComplete()
         if (row < m_tableWidget->rowCount() && m_tableWidget->item(row, COL_POINTS) != nullptr)
             m_tableWidget->item(row, COL_POINTS)->setText(pointsCellText(*last()));
     }
+    return false;
 }
 
 void Measurements::toggleVisibility(int row, bool _state)

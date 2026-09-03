@@ -564,7 +564,7 @@ public slots:
     void on_impedanceChanged(double _z0);
     void on_exportCableSettings(QString _description);
 
-    void on_measurementComplete();
+    bool on_measurementComplete(); // returns true if the just-finished (empty) row was deleted
     void toggleVisibility(int row, bool _state);
 
     void redrawMultiGraph(bool _incrementally);
