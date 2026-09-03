@@ -90,6 +90,7 @@ private:
     // the fallback sequence's "data 1" pass) into a real SParamPoint.
     QVector<std::complex<double>> m_s11Buffer;
     static std::complex<double> parseReIm(const QString& line);
+    static std::complex<double> impedanceFromReflection(std::complex<double> gamma); // 50 ohm reference, shared by toRawData() and emitPoint()
 
     // "scan" command capability probe/state -- see ScanSupport's comment.
     ScanSupport m_scanSupport = ScanSupport::Unknown;

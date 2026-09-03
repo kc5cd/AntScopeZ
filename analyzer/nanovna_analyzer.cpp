@@ -502,11 +502,11 @@ void NanovnaAnalyzer::emitPoint(double fqMHz, std::complex<double> s11, std::com
     if (fqMHz <= 0)
         return;
 
-    double re = s11.real(), im = s11.imag();
     RawData raw;
     raw.fq = fqMHz;
-    raw.r = (1-re*re-im*im)/((1-re)*(1-re)+im*im) * 50;
-    raw.x = (2*im)/((1-re)*(1-re)+im*im) * 50;
+    std::complex<double> z = impedanceFromReflection(s11);
+    raw.r = z.real();
+    raw.x = z.imag();
     emit newData(raw);
 
     SParamPoint sp;
@@ -524,6 +524,15 @@ std::complex<double> NanovnaAnalyzer::parseReIm(const QString& line)
     if (tok.size() < 2)
         return std::complex<double>(0,0);
     return std::complex<double>(tok.at(0).toDouble(), tok.at(1).toDouble());
+}
+
+std::complex<double> NanovnaAnalyzer::impedanceFromReflection(std::complex<double> gamma)
+{
+    double re = gamma.real(), im = gamma.imag();
+    double denom = (1-re)*(1-re) + im*im;
+    double r = (1 - re*re - im*im) / denom * 50;
+    double x = (2*im) / denom * 50;
+    return std::complex<double>(r, x);
 }
 
 void NanovnaAnalyzer::finishMeasurementSegment()
@@ -673,10 +682,9 @@ RawData NanovnaAnalyzer::toRawData(QString& s1p)
     double param2 = str.toDouble(&ok);
     if (!ok)
         qDebug() << "***** ERROR: " << str;
-    data.r = (1-param1*param1-param2*param2)/((1-param1)*(1-param1)+param2*param2);
-    data.x = (2*param2)/((1-param1)*(1-param1)+param2*param2);
-    data.r *= 50;
-    data.x *= 50;
+    std::complex<double> z = impedanceFromReflection(std::complex<double>(param1, param2));
+    data.r = z.real();
+    data.x = z.imag();
     return data;
 }
 
