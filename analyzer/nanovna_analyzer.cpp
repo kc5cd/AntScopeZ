@@ -430,13 +430,20 @@ qint32 NanovnaAnalyzer::parseBinaryScan()
                 // include, previously just a silent beep+cancel with no
                 // message at all.
                 m_scanSupport = ScanSupport::AsciiOnly;
-                setIsMeasuring(false);
                 emit signalAnalyzerError(tr("NanoVNA binary scan reply didn't match the "
                                              "request (mask %1 vs %2, points %3 vs %4) -- "
                                              "falling back to ASCII scanning.")
                                               .arg(m_binaryMask).arg(m_binarySentMask)
                                               .arg(m_binaryPoints).arg(m_binarySentPoints));
                 emit signalMeasurementError();
+                // Route through the same completion path every other
+                // end-of-segment case uses instead of just clearing
+                // isMeasuring directly -- otherwise completeMeasurement()
+                // never fires, leaving the just-created (empty) measurement
+                // row orphaned and, in Continuous mode, the continuous flag
+                // stuck set. Also handles setParseState(WAIT_NANO_NO) itself.
+                finishMeasurementSegment();
+                return m_incomingBuffer.size(); // discard -- can't trust anything else in here
             }
             setParseState(WAIT_NANO_NO);
             return m_incomingBuffer.size(); // discard -- can't trust anything else in here
