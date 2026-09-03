@@ -50,6 +50,15 @@ void MainWindow::on_singleStart_clicked()
     if (isMeasuring())
     {
         m_bInterrupted = true;
+        // Same as on_pressEsc()'s equivalent call -- this is the other
+        // user-facing way to stop a running scan (re-clicking Single), and
+        // needs the same "stop accepting further points" flag Measurements::
+        // on_newData()/on_newS21Data()/on_newUserData() now check. Missing
+        // here before: only Esc set it, so stopping via this button instead
+        // left leftover in-flight points (several devices, e.g. BLE, have
+        // no real wire abort -- see BleAnalyzer::stopMeasure()) still
+        // landing in m_measurements.last() same as any other point.
+        m_measurements->interrupt();
         emit stopMeasure();
         ui->singleStart->setChecked(false);
         ui->fullBtn->setEnabled(true);
@@ -207,6 +216,8 @@ void MainWindow::on_continuousStartBtn_clicked(bool checked)
     if (isMeasuring())
     {
         m_bInterrupted = true;
+        // See on_singleStart_clicked()'s identical call for why.
+        m_measurements->interrupt();
         emit stopMeasure();
         ui->singleStart->setChecked(false);
         ui->continuousStartBtn->setChecked(false);
@@ -601,6 +612,15 @@ void MainWindow::on_measurementComplete()
             emit measureContinuous(start*1000, stop*1000, m_dotsNumber);
         } else {
             m_bInterrupted = true;
+            // Was missing -- unlike the Single-scan branch just below (see
+            // its own identical call), this path never told Measurements
+            // the scan was actually done, so the Points column kept
+            // showing whatever count it had at the last mid-scan redraw
+            // instead of the real final one. Only a *later* scan's own
+            // fresh table rebuild (on_newMeasurement()) happened to paper
+            // over it. Not autoPlaceAtLowestSwr() -- that's deliberately
+            // single/full-scan only, see its own comment.
+            m_measurements->on_measurementComplete();
             ui->measurmentsDeleteBtn->setEnabled(true);
             ui->measurmentsClearBtn->setEnabled(true);
             m_analyzer->setContinuos(false);
@@ -669,6 +689,9 @@ void MainWindow::on_measurementCompleteNano()
             emit measureContinuous(0, 0, m_dotsNumber);
         } else {
             m_bInterrupted = true;
+            // See the identical fix/comment in on_measurementComplete()'s
+            // own Continuous-interrupted branch.
+            m_measurements->on_measurementComplete();
             ui->measurmentsDeleteBtn->setEnabled(true);
             ui->measurmentsClearBtn->setEnabled(true);
             m_analyzer->setContinuos(false);
@@ -853,6 +876,42 @@ void MainWindow::onMeasurementError()
     QApplication::beep();
     //showErrorPopup(tr("Measurement ERROR!"), 2000);
     on_pressEsc();
+}
+
+// Was a Notification::showMessage() banner -- fixed geometry (a 40px-tall
+// strip sized for one-line transient confirmations like the autocalibration
+// notice, see on_autocalibrateClick()), which clipped anything sentence-
+// length, and auto-dismissed after 5s whether the user had read it or not.
+// A real message a user needs to act on (check the cable, check whether
+// something else has the device open) gets a real, standard-looking error
+// dialog instead -- QMessageBox, shown non-modally (show(), not exec()) so
+// it doesn't block the rest of the app, dismissed by the user's own OK
+// click rather than a timer. WA_DeleteOnClose + the QPointer in
+// m_analyzerErrorBox mean a second error arriving while one's already up
+// (repeated watchdog fires, several stitched segments timing out in a row)
+// updates and re-raises the same box instead of stacking duplicates.
+void MainWindow::onAnalyzerError(const QString& error)
+{
+    // Plain "YYYYMMDD-HHMMSS: " prefix -- not tied to any locale/date
+    // format setting, since this is meant to line up with Debug-yyyyMMdd.log
+    // filenames/entries (debuglog.cpp) if this ever grows into writing these
+    // to that same log too (not done yet -- out of scope for now, this is
+    // just groundwork so the timestamp's already in the right shape).
+    QString stamped = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss") + ": " + error;
+
+    if (m_analyzerErrorBox) {
+        m_analyzerErrorBox->setText(stamped);
+        m_analyzerErrorBox->raise();
+        m_analyzerErrorBox->activateWindow();
+        return;
+    }
+
+    QMessageBox* box = new QMessageBox(QMessageBox::Warning, tr("Analyzer Error"),
+                                        stamped, QMessageBox::Ok, this);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->setWindowModality(Qt::NonModal);
+    m_analyzerErrorBox = box;
+    box->show();
 }
 
 void MainWindow::on_presssCtrlAltShiftN()

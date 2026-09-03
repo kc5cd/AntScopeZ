@@ -13,6 +13,7 @@ bool g_usbHidEnabled = false;
 bool g_bleEnabled = false;
 bool g_nanovnaEnabled = false;
 bool g_bleShowPings = true;
+bool g_detailedErrorsEnabled = false;
 
 // Kept open across calls rather than reopened per packet -- BLE especially
 // can be chatty during a sweep. Reopened when the calendar date changes
@@ -100,6 +101,9 @@ void DebugLog::setUsbHidEnabled(bool enabled) { g_usbHidEnabled = enabled; }
 void DebugLog::setBleEnabled(bool enabled) { g_bleEnabled = enabled; }
 void DebugLog::setNanovnaEnabled(bool enabled) { g_nanovnaEnabled = enabled; }
 void DebugLog::setBleShowPings(bool show) { g_bleShowPings = show; }
+
+void DebugLog::setDetailedErrorsEnabled(bool enabled) { g_detailedErrorsEnabled = enabled; }
+bool DebugLog::detailedErrorsEnabled() { return g_detailedErrorsEnabled; }
 
 void DebugLog::serialTx(const QByteArray &data)
 {

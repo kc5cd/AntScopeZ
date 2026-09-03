@@ -31,5 +31,18 @@
         <source>Files of &amp;type:</source>
         <translation>&amp;Тип файлів:</translation>
     </message>
+    <message>
+        <!--
+          Same bug, same date (2026-08-24, just not caught in the same
+          pass): qtbase_uk.ts only has "Look in:" (no ampersand), but the
+          real widget requests "&amp;Look in:" (confirmed via `strings`
+          against libQt6Widgets.so.6, same as "Files of &amp;type:" above).
+          Re-uses qtbase_uk.qm's own existing (correct) wording for
+          "Перегляд в:", mnemonic on the first letter ("П") same as the
+          "type" entry above.
+        -->
+        <source>&amp;Look in:</source>
+        <translation>&amp;Перегляд в:</translation>
+    </message>
 </context>
 </TS>

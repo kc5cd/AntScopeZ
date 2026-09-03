@@ -278,8 +278,28 @@ Developed on Linuxmint. Using a RigExpert Match RFE (BLE and hidusb):
   ampersand included -- whoever last updated Qt's own `.ts` for this
   translated an older/different source string. Not `es`-specific in
   principle; any language where Qt's own catalog has drifted from the
-  current `qfiledialog.ui` mnemonics would show the same gap. Nothing to
-  fix here -- it's upstream Qt's translation, not this project's.
+  current `qfiledialog.ui` mnemonics would show the same gap.
+  **Both `"Files of &type:"` (2026-08-24) and `"&Look in:"` (2026-09-01)
+  are now fixed the same way:** rather than waiting on upstream Qt,
+  `locales/qtbase_override_<code>.ts` (`es`/`ja`/`uk`, two messages each
+  now) supplies just those two corrected mnemonic strings, re-using each
+  language's own existing (correct) wording for the rest -- compiled and
+  staged alongside the regular `qtbase_<code>.qm` (see
+  `ANTSCOPE_QTBASE_OVERRIDE_*` in `CMakeLists.txt`), loaded after it so
+  it wins on the messages it covers without needing a full retranslate of
+  Qt's own catalog. Confirmed working (not just file-inspected) by
+  loading both translators the same order/way the app does and checking
+  `qApp->translate("QFileDialog", "&Look in:")` resolves correctly for
+  all three languages. `"&Look in:"`'s translation had no letter shared
+  with English "Look" for `es`/`uk` (unlike `"type"`'s lucky match on
+  "t"), so those two use the first letter of the translated word's
+  operative term instead -- a defensible but not Qt-upstream-verified
+  choice of accelerator letter, same caveat as any translation this
+  project supplies itself rather than sourcing from Qt. If a similar gap
+  turns up in some *other* qtbase string later, this is the pattern to
+  repeat: confirm the real live string via `strings` against
+  `libQt6Widgets.so.6` (or wherever it actually lives), then add one
+  `<message>` per affected language here.
 - **The S21 tab is import-only -- there's still no live S21/S12 capture
   from real hardware.** As of the 2-port `.s2p` import work, the tab is
   no longer unconditionally hidden: `MainWindow::on_importFinished()`
@@ -475,8 +495,8 @@ Developed on Linuxmint. Using a RigExpert Match RFE (BLE and hidusb):
       RigExpert Match RFE (firmware `FT810`) that rejects `FDB` also
       rejects `EFRX10\r` outright -- `Error.Not recognized` over HID
       (2026-08-20).
-    - **No commentary anywhere in this codebase, or in
-      `SUPPORTED_DEVICES.md`, identifies which RigExpert model or
+    - **No commentary anywhere in this codebase, or in the user guide's
+      Supported Devices section, identifies which RigExpert model or
       firmware, if any, actually accepts `EFRX` or `FDB`.**
       `AnalyzerParameters` (`analyzer/analyzerparameters.h`) has no
       per-model capability flags for either command -- nothing gates

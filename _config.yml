@@ -9,7 +9,6 @@ show_downloads: false
 # Paths are relative to the site root and must match real files below.
 header_pages:
   - docs/user-guide.md
-  - SUPPORTED_DEVICES.md
   - BUILDINFO.md
   - CHANGELOG.md
 

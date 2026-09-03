@@ -2,6 +2,7 @@
 #include <QSysInfo>
 #include <QOperatingSystemVersion>
 #include <QDateTime>
+#include <QMetaEnum>
 #include "crc32.h"
 #include "debuglog.h"
 
@@ -67,9 +68,12 @@ void BleAnalyzer::setError(const QString& error)
     if (m_error != error) {
         m_error = error;
         emit errorChanged();
-#ifdef _DEBUG
-        emit signalAnalyzerError(error);
-#endif
+        // Was #ifdef _DEBUG-only -- these are useful but fairly technical/
+        // frequent BLE-stack-level messages, gated behind a runtime opt-in
+        // now that they reach a real dialog instead of being compiled out
+        // entirely. See DebugLog::setDetailedErrorsEnabled()'s comment.
+        if (DebugLog::detailedErrorsEnabled())
+            emit signalAnalyzerError(error);
     }
 }
 
@@ -248,8 +252,14 @@ void BleAnalyzer::setDevice(BleDeviceInfo *device)
                 this, &BleAnalyzer::serviceScanDone, Qt::QueuedConnection);
         connect(m_control, &QLowEnergyController::errorOccurred, this,
                 [this](QLowEnergyController::Error error) {
-                    Q_UNUSED(error);
-                    setError("Cannot connect to remote device.");
+                    // Was Q_UNUSED -- the enum value itself is genuine
+                    // diagnostic data, cheap to have right here, previously
+                    // just discarded. QMetaEnum gives back Qt's own name
+                    // for it (e.g. "RemoteHostClosedError") without hand-
+                    // maintaining a switch/string table.
+                    QMetaEnum me = QMetaEnum::fromType<QLowEnergyController::Error>();
+                    setError(tr("Cannot connect to remote device. (%1)")
+                                 .arg(me.valueToKey(error)));
                 });
 
         connect(m_control, &QLowEnergyController::connected, this, [this]() {
@@ -257,7 +267,7 @@ void BleAnalyzer::setDevice(BleDeviceInfo *device)
             m_control->discoverServices();
         });
         connect(m_control, &QLowEnergyController::disconnected, this, [this]() {
-            setError("LowEnergy controller disconnected");
+            setError(tr("LowEnergy controller disconnected."));
         });
 
         // Connect
@@ -311,7 +321,7 @@ void BleAnalyzer::serviceStateChanged(QLowEnergyService::ServiceState s)
 //        }
         const QLowEnergyCharacteristic hrChar = m_service->characteristic(QBluetoothUuid(uuidRead));
         if (!hrChar.isValid()) {
-            setError("'Read characteristic' not found.");
+            setError(tr("'Read characteristic' not found."));
             break;
         }
         const QLowEnergyCharacteristic hrReturn = m_service->characteristic(QBluetoothUuid(uuidReturn));
@@ -388,7 +398,10 @@ void BleAnalyzer::handlePing() //vnn_05 1sec timer
             // TODO...
             AnalyzerParameters::setCurrent(nullptr);
             m_pingTimer->stop();
-            QString err = tr("Analyzer disconnected");
+            // t_noRx (already computed above) is the actual elapsed silence
+            // that tripped this -- cheap, genuine diagnostic data, previously
+            // just discarded.
+            QString err = tr("Analyzer disconnected. (no response for %1 ms)").arg(t_noRx);
             setError(err);
             emit analyzerDisconnected();
         } else {
@@ -403,12 +416,14 @@ void BleAnalyzer::handlePing() //vnn_05 1sec timer
 void BleAnalyzer::write(QByteArray& arr)
 {
     if (m_service == nullptr) {
-        setError("REU BLE service not found");
+        // Same wording as serviceScanDone()'s identical check -- was
+        // inconsistently capitalized/punctuated and not tr()-wrapped here.
+        setError(tr("REU BLE Service not found."));
         return;
     }
     const QLowEnergyCharacteristic hrChar = m_service->characteristic(QBluetoothUuid(uuidWrite));
     if (!hrChar.isValid()) {
-        setError("Write chracteristic doesn't exist!");
+        setError(tr("Write characteristic doesn't exist!")); // was "chracteristic"
         //qInfo() << "BleAnalyzer::write " << error();
         return;
     }
@@ -426,7 +441,9 @@ void BleAnalyzer::dataReceived(const QLowEnergyCharacteristic &c, const QByteArr
     m_lastReadTimeMS = QDateTime::currentMSecsSinceEpoch();
     if (!checkCRC(value)) {
         qInfo() << "errorCRC";
-        QString err = tr("Analyzer error: wrong CRC");
+        // The packet itself is the diagnostic data here -- small (BLE_PACKET_SIZE),
+        // so including it in full is fine.
+        QString err = tr("Analyzer error: wrong CRC. (data: %1)").arg(QString::fromLatin1(value.toHex(' ')));
         setError(err);
         emit crcError();
         return;

@@ -11,12 +11,13 @@ a handful of stub sections into most of what's below; if something's
 missing or wrong, that's more likely this guide being incomplete than the
 app -- open an issue.
 
-See [SUPPORTED_DEVICES.md](../SUPPORTED_DEVICES.md) for the full list of
+See [Supported devices](#supported-devices) below for the full list of
 supported analyzer models and brands.
 
 ## Table of contents
 
 - [Installing and uninstalling](#installing-and-uninstalling)
+- [Supported devices](#supported-devices)
 - [First-time setup checklist](#first-time-setup-checklist)
 - [Getting started](#getting-started)
 - [Controls reference](#controls-reference)
@@ -97,6 +98,81 @@ whatever per-user config folder it wrote to (see
 [Files and directories](#files-and-directories) for the Windows/macOS
 equivalents).
 
+## Supported devices
+
+AntScopeZ's device support isn't limited to RigExpert's own antenna
+analyzers. This list is generated from the app's actual model table --
+`AnalyzerParameters::fill()` in `analyzer/analyzerparameters.h` -- which
+is the single source of truth for what's recognized by name/serial-number
+prefix. If this section and that function ever disagree, the code wins.
+
+*Caveat: not every device below is one the maintainer personally owns and
+can confirm actually works. It is for this reason the firmware update
+mechanism is also disabled -- so you don't risk bricking a device from
+something untested/unreproducible.* **Use this software at your own
+risk.**
+
+### RigExpert AA-series
+
+AA-30, AA-30 ZERO, AA-30.ZERO, AA-35 ZOOM, AA-54, AA-55 ZOOM, AA-170,
+AA-200, AA-230, AA-230 ZOOM, AA-230PRO, AA-500, AA-520, AA-600,
+AA-650 ZOOM, AA-700 ZOOM, AA-1000, AA-1400, AA-1500 ZOOM, AA-1500 SE,
+AA-1500 ZOOM SE, AA-2000 ZOOM, AA-3000 ZOOM
+
+### RigExpert "Stick" series (handheld)
+
+Stick 230, Stick 500, Stick Pro, Stick XPro
+
+### RigExpert "Match" series (antenna matcher/tuner)
+
+Match, MATCH U
+
+### RigExpert (unconfirmed naming)
+
+These use the same serial-number-prefix detection scheme as the rest of
+the RigExpert lineup above, but the product names below haven't been
+independently confirmed -- worth double-checking against RigExpert's
+current catalog before relying on them.
+
+- Zero II
+- Touch
+- Touch E-Ink
+
+### Other brands
+
+- **NanoVNA** -- the open-source/DIY VNA project. Handled by its own
+  dedicated `analyzer/nanovna_analyzer.cpp` class, entirely separate
+  connection/protocol handling from the RigExpert-oriented analyzer
+  classes. Detected via USB VID:PID `0483:5740` -- STMicroelectronics'
+  generic "Virtual COM Port" demo ID, not a NanoVNA-specific registered
+  one, which nearly the whole NanoVNA ecosystem ships unmodified (few
+  variants bothered registering their own USB VID), so this is a broad
+  but imprecise family match rather than a specific-model check. Speaks
+  the original ASCII shell protocol (`info`/`sweep`/`frequencies`/`data`
+  over what's really a USB CDC-ACM serial port, not a distinct native-USB
+  path) -- the lowest common denominator most of the family (NanoVNA,
+  NanoVNA-H, NanoVNA-H4, DiSlord's fork, most clones) has stayed
+  backward-compatible with, with an opportunistic upgrade to a faster
+  ASCII/binary `scan` command where the connected firmware supports it.
+  Requests real 2-port S11+S21 data on every sweep (not just S11) --
+  new, and not yet validated against real hardware. The `info` response's
+  `Board:` line reports the actual connected firmware/hardware string if
+  you need to confirm exactly what's plugged in.
+- **WilsonPro CAA** -- Wilson Electronics' own brand (cellular
+  signal-booster company), not RigExpert. Detected via its own
+  serial-number prefix alongside the RigExpert ones, which suggests a
+  RigExpert-manufactured unit sold under WilsonPro's branding
+  (OEM/white-label) rather than an independent protocol implementation --
+  inferred from the code pattern, not confirmed.
+
+### Anything else
+
+Settings → Developer → Custom Analyzer lets you manually define a
+"prototype" -- frequency range, screen size, protocol -- for a device
+not in the table above, without a code change. Currently disabled (not
+safe to use yet -- see `BUILDINFO.md`'s Known Issues). See
+[Customized analyzer parameters](#customized-analyzer-parameters) below.
+
 ## First-time setup checklist
 
 A fast path through one-time setup, before your first real scan.
@@ -137,6 +213,11 @@ unaffected either way.
 
 Once connected, the window's title bar shows the device's model/name
 instead of "Analyzer not connected".
+
+If AntScopeZ finds your analyzer but can't actually open it, a dialog
+explains why -- most often, something else already has it open (another
+program, or another AntScopeZ window pointed at the same device). Close
+whatever else is using it and try again.
 
 ### Your first scan
 
@@ -181,7 +262,7 @@ menu bar instead (File / Edit / View / Connect Analyzer / Help).
 | Settings... | Opens the [Settings dialog](#settings) |
 | Print... | Opens the [Print dialog](#print-and-screenshots) for the current chart |
 | Save Screenshot... | Saves the *current chart* (not the whole window) straight to a PNG file you pick -- same image Ctrl+C copies, just written to disk instead of the clipboard |
-| Screenshot from AA | Captures the *analyzer's own* on-device screen (not every model supports this -- see [Supported Devices](../SUPPORTED_DEVICES.md)) -- see [Print and screenshots](#print-and-screenshots) |
+| Screenshot from AA | Captures the *analyzer's own* on-device screen (not every model supports this -- see [Supported devices](#supported-devices)) -- see [Print and screenshots](#print-and-screenshots) |
 | Data from AA | Loads measurement results already stored in the analyzer's own memory -- see [Data from AA](#data-from-aa) |
 | Exit | Closes AntScopeZ |
 
@@ -195,7 +276,7 @@ menu bar instead (File / Edit / View / Connect Analyzer / Help).
 
 | Control | What it does |
 |---|---|
-| Cursor Details / Markers Hint / Cursor Params | Toggle the various hover/cursor readout popups on the charts (Cursor Details is docked in the main window; the other two float) |
+| Cursor Details / Markers Hint / Cursor Params | Toggle the various hover/cursor readout panels on the charts (Cursor Details and the Markers table are both docked in the main window; Cursor Params still floats) |
 | Show Band Name | Labels the shaded bands on the charts with their names, not just color |
 | Band Selector | Shows/hides the band-selector dropdown above the Presets list -- see [Presets and bands](#presets-and-bands) |
 | Band Highlighting | Submenu picking which region's band data to shade on the charts |
@@ -314,6 +395,7 @@ theme's colors, see the new [Themes tab](#themes-tab) below.
 | Max measurements | Cap on how many measurements can be displayed at once |
 | Allow extended chart zoom | Off by default. Lets Ctrl+scroll/Ctrl+`+`/`-` zoom the SWR, Z=R+jX, Z=R‖jX, and RL charts' Y-axis past their normal preset limits (e.g. SWR down to a 0.1-wide window instead of 0.4, RL out to unlimited dB instead of capping at 50), and lets plain scroll zoom the TDR chart's distance axis out past 1000m -- see [Keyboard and mouse shortcuts](#keyboard-and-mouse-shortcuts-in-the-plot-area) |
 | System impedance | The reference impedance (default 50Ω) everything -- SWR, Smith chart center, RL -- is calculated against |
+| Analyzer timeout | Seconds a scan can go without receiving a single data point before AntScopeZ treats it as failed and shows an error, instead of leaving the busy indicator/wait cursor stuck forever (device unreachable, or busy -- already held open by another program or another AntScopeZ window). Default 8 |
 | Data folder (with Browse...) | Where save/export/screenshot dialogs across the app default to -- see [Files and directories](#files-and-directories) |
 | Save actions update this folder | Off by default. When on, completing a *save* (not Open/Import) somewhere else moves Data folder there too, so it follows you; when off, Data folder only changes when you set it here yourself |
 
@@ -345,7 +427,7 @@ see [Connecting to your analyzer](#connecting-to-your-analyzer).
 
 | Control | What it does |
 |---|---|
-| Available / Selected lists | Choose which data columns the [Markers](#markers) popup shows, and in what order -- move columns between the two lists (or reorder within Selected) with the arrow buttons. Del/Marker/#/FQ are pinned at the top of Selected and can't be removed or reordered; everything else is up to you. |
+| Available / Selected lists | Choose which data columns the [Markers](#markers) table shows, and in what order -- move columns between the two lists (or reorder within Selected) with the arrow buttons. Del/Marker/#/FQ are pinned at the top of Selected and can't be removed or reordered; everything else is up to you. |
 
 ### Cable tab
 
@@ -399,7 +481,14 @@ Both stay editable regardless of Preset/Custom.
 
 The math behind Subtract/Add is a real lossy-transmission-line model
 (`Measurements::calcFarEnd()`), using velocity factor, R0, conductive/
-dielectric loss, and cable length together -- not just a cosmetic toggle.
+dielectric loss, and cable length together -- not just a cosmetic toggle,
+and it does visibly change the plotted values when you use it.
+
+**Consider this experimental.** The model itself hasn't been validated
+against a known-good reference measurement, so treat the compensated
+numbers as a reasonable estimate rather than something to trust for a
+precision antenna trim -- especially if the correction looks larger or
+smaller than you'd expect for your cable and length.
 
 | Control | What it does |
 |---|---|
@@ -442,7 +531,7 @@ The one working control here, right under "Use customized analyzer":
 clamping entirely -- normally, starting a scan silently snaps whatever
 you typed back to your connected device's own documented min/max range
 (see the connected device's entry in
-[SUPPORTED_DEVICES.md](../SUPPORTED_DEVICES.md)); checking this lets
+[Supported devices](#supported-devices)); checking this lets
 you request a scan outside that range instead, useful for probing
 whether a device secretly handles more than its listed spec. Off by
 default -- most users will never need this.
@@ -470,6 +559,15 @@ unchecked when you open AntScopeZ, regardless of how you left them
 last time, so logging never keeps running silently in the background
 across restarts. Turn them back on each time you actually want to
 capture something.
+
+**Error Reporting & Logging** -- one checkbox, **Report Detailed
+Errors**, off by default. AntScopeZ always shows a small set of
+analyzer error messages regardless of this setting (busy/unreachable
+device, see [Connecting to your analyzer](#connecting-to-your-analyzer));
+turning this on additionally surfaces BLE's own, more technical
+connection/protocol errors in that same dialog -- useful when chasing a
+flaky BLE connection, more detail than most day-to-day use needs
+otherwise. Session-only, same convention as Debug Logging above.
 
 ### Updates tab
 
@@ -755,10 +853,16 @@ multiple views simultaneously. You can place up to
 (5 by default); once you hit that cap, double-clicking to add another
 shows a brief notification instead of placing one.
 
-Hovering shows a readout of that marker's values (frequency, SWR, RL,
-R/X/Z, and more, depending on the chart) in a popup table. The View
-menu's **Markers Hint** controls whether that readout pops up
-automatically; which columns it shows, and in what order, is set from
+Every placed marker's values (frequency, SWR, RL, R/X/Z, and more) show
+up in a table docked under the plot tabs, one row per marker per
+measurement currently in the Measurements list -- so a marker's values
+across several saved scans are all visible at once, not just the
+latest. The View menu's **Markers Hint** checkbox shows or hides this
+table; it's shown (empty, headers only) as soon as it's turned on, even
+before you've placed a marker. Click a marker's **x** to remove it. The
+table scrolls (horizontally and vertically, as needed) if it grows past
+the space given to it -- drag the splitter above it to resize. Which
+columns it shows, and in what order, is set from
 [Settings → Markers](#markers-tab).
 
 For a 2-port measurement (a `.s2p` import), the Markers table also gains
@@ -852,16 +956,22 @@ afterward.
 ## Two-port measurement (S21/S12)
 
 AntScopeZ can display and export 2-port S-parameter data (S11, S21,
-S12, S22) -- but only from an **imported file**. There's no live
-capture from real 2-port hardware yet; see the note at the end of this
-section.
+S12, S22), two ways:
 
-**Import a `.s2p` file** (File → Import Data..., or drag-and-drop) and
-AntScopeZ automatically reveals a hidden **S21** chart tab, plotting
-S21 and S12 magnitude (dB) and phase together. Every other chart tab
-(SWR, Smith, Z=R+jX, etc.) keeps showing that measurement's S11 slice
-as usual -- a 2-port import is still perfectly valid 1-port data, it
-just also carries the extra two parameters.
+- **Import a `.s2p` file** (File → Import Data..., or drag-and-drop) --
+  works for any device's exported data, since it's just reading a file.
+- **A live scan on NanoVNA-family hardware** -- every sweep now requests
+  real S11+S21 directly from the device, not just S11. This is new and
+  not yet validated against real hardware as of this writing; if it
+  doesn't behave as expected on yours, please open an issue. RigExpert-
+  family analyzers have no live 2-port capture -- import a `.s2p` file
+  exported from other VNA software instead, same as before.
+
+Either way, AntScopeZ automatically reveals a hidden **S21** chart tab,
+plotting S21 and S12 magnitude (dB) and phase together. Every other
+chart tab (SWR, Smith, Z=R+jX, etc.) keeps showing that measurement's
+S11 slice as usual -- a 2-port measurement is still perfectly valid
+1-port data, it just also carries the extra two parameters.
 
 From there:
 
@@ -882,10 +992,10 @@ Typical uses: checking a filter or attenuator's passband/insertion loss
 reciprocity (S21 should ≈ S12), or just archiving a manufacturer- or
 VNA-supplied `.s2p` alongside your own scans.
 
-**No live 2-port capture:** this is entirely file-import-driven --
-AntScopeZ can't drive a real analyzer to *measure* S21/S12 itself right
-now, even on hardware that nominally supports it. That's a known,
-tracked gap, not a bug to report.
+**RigExpert-family devices:** still no live 2-port capture, even on
+models that nominally support it on the wire -- import a `.s2p` file
+from other VNA software instead. That's a known, tracked gap, not a bug
+to report.
 
 ## Print and screenshots
 
@@ -911,7 +1021,7 @@ image or document:
   active -- clicking it does nothing in that case.
 - **File → Screenshot from AA** captures the *analyzer's own* on-device
   screen (not every model supports this -- see
-  [Supported Devices](../SUPPORTED_DEVICES.md)) and opens its own small
+  [Supported devices](#supported-devices)) and opens its own small
   dialog: add an optional comment, then **Export to PDF**,
   **Export to BMP**, or **To clipboard**. **Refresh** re-captures the
   device's screen again without closing the dialog, in case it's
@@ -1192,6 +1302,7 @@ activeTheme=0
 current_band=ITU Region 2 - Americas
 maxMarkers=5
 maxMeasurements=5
+analyzerTimeoutSec=8
 open-connect-analyzer-at-launch=false
 restrictFq=true
 show-band-name=true
@@ -1260,7 +1371,7 @@ Notes on specific keys:
   written back out on exit -- the app's actual live check is whether the
   three `*Path` files exist on disk, not this flag (see
   [Calibration (OSL)](#calibration-osl)).
-- **`[Markers]header`** -- the Markers popup's column list and order,
+- **`[Markers]header`** -- the Markers table's column list and order,
   same value Settings → Markers' Available/Selected lists edit. Not
   bookkeeping -- hand-editing it works, but the Settings tab is the
   supported way to change it.
@@ -1298,10 +1409,6 @@ delete.
 - **Clicking Print does nothing.** Print isn't available while the
   Multi tab is active -- switch to any other chart tab first. See
   [Print and screenshots](#print-and-screenshots).
-- **Some file-dialog text (e.g. "Files of type:") stays in English no
-  matter what language is selected.** That's a gap in Qt's own shipped
-  translation, not something this app controls -- see `BUILDINFO.md`'s
-  Known Issues.
 - **The analyzer doesn't reconnect automatically at launch.** Check
   that Settings → General → "Open 'Connect Analyzer' on launch" is
   checked, and that "Use same selection for future connections" was
@@ -1329,16 +1436,25 @@ delete.
   nothing gets written unless something's actually connected and
   talking over it. See [Files and directories](#files-and-directories)
   for the exact file location.
-- **Cable loss compensation ("Subtract cable"/"Add cable") doesn't
-  seem to change anything.** Flagged as unverified in
-  [the Cable tab reference](#cable-tab) -- it may not currently do
-  anything at all; not confirmed either way.
-- **The S21 tab won't appear no matter what I scan.** It only shows up
-  after *importing* a 2-port `.s2p` file -- see
-  [Two-port measurement](#two-port-measurement-s21s12). There's no live
-  S21/S12 capture from real hardware yet, even on analyzer models that
-  nominally support it -- see `BUILDINFO.md`'s Known Issues for the full
-  detail on what's built and what's still missing for that.
+- **Cable loss compensation ("Subtract cable"/"Add cable") numbers look
+  off.** It does apply a real correction (see
+  [the Cable tab reference](#cable-tab)), not a no-op -- but the model
+  is experimental, not validated against a known-good reference
+  measurement. Double-check your cable length/velocity factor/R0/loss
+  figures are actually right for your feedline before trusting the
+  corrected numbers for anything precise.
+- **The S21 tab won't appear no matter what I scan.** On a RigExpert-
+  family analyzer, it only shows up after *importing* a 2-port `.s2p`
+  file -- there's no live S21/S12 capture on that hardware yet, even on
+  models that nominally support it. NanoVNA-family hardware now
+  requests it live on every scan; see
+  [Two-port measurement](#two-port-measurement-s21s12).
+- **A scan seems stuck -- busy cursor or indicator never clears.**
+  AntScopeZ waits up to Settings → General → "Analyzer timeout" (8
+  seconds by default) for each point to arrive before giving up and
+  showing an error -- check the device, cable, and that nothing else
+  (another program, or another AntScopeZ window) already has it open.
+  See [General tab](#general-tab).
 
 ---
 

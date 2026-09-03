@@ -524,9 +524,35 @@ std::complex<double> Measurements::sparamFromFormat(int iFormat, double v1, doub
     }
 }
 
+// std::arg() always wraps into (-180, 180] degrees. A real transmission
+// phase can rack up many full turns across a wide sweep, so the raw
+// wrapped value jumps unpredictably between adjacent points -- worse the
+// fewer points there are (a >360-degree change between two samples wraps
+// into something that looks like noise, not a smooth ramp). Unwrap by
+// accumulating the shortest-path delta between consecutive points
+// instead, same technique as numpy.unwrap()/MATLAB's unwrap(). This can't
+// recover the *true* phase if an actual >360-degree jump happened between
+// two real samples (that's undersampling, not fixable in the display
+// layer), but it's still a smooth, honest trace instead of misleading
+// vertical jumps, and is exact whenever points are reasonably dense.
+double Measurements::unwrapPhaseDeg(double rawDeg, bool& havePrev, double& prevRaw, double& prevUnwrapped)
+{
+    if (!havePrev) {
+        havePrev = true;
+        prevRaw = prevUnwrapped = rawDeg;
+        return rawDeg;
+    }
+    double delta = rawDeg - prevRaw;
+    while (delta > 180.0) delta -= 360.0;
+    while (delta <= -180.0) delta += 360.0;
+    prevUnwrapped += delta;
+    prevRaw = rawDeg;
+    return prevUnwrapped;
+}
+
 // Fills in a just-imported 2-port measurement's dataSParam plus the
 // derived S21/S12 magnitude(dB)/phase(degrees) graphs the S21 tab
-// actually plots. Batch, not per-point -- on_newS21Data() (the live-
+// actually plots. Batch, not per-point -- on_newSParamPoint() (the live-
 // capture path) redraws after every single point, which is fine for one
 // point at a time but far too slow across a whole imported file.
 void Measurements::populateSParamData(const QList<SParamPoint>& points)
@@ -536,35 +562,9 @@ void Measurements::populateSParamData(const QList<SParamPoint>& points)
 
     measurement& mm = m_measurements.last();
 
-    // std::arg() always wraps into (-180, 180] degrees. A real
-    // transmission phase can rack up many full turns across a wide
-    // sweep, so the raw wrapped value jumps unpredictably between
-    // adjacent points -- worse the fewer points there are (a >360-degree
-    // change between two samples wraps into something that looks like
-    // noise, not a smooth ramp). Unwrap by accumulating the shortest-path
-    // delta between consecutive points instead, same technique as
-    // numpy.unwrap()/MATLAB's unwrap(). This can't recover the *true*
-    // phase if an actual >360-degree jump happened between two real
-    // samples (that's undersampling, not fixable in the display layer),
-    // but it's still a smooth, honest trace instead of misleading
-    // vertical jumps, and is exact whenever points are reasonably dense.
     bool haveS21Prev = false, haveS12Prev = false;
     double s21PrevRaw = 0, s21PrevUnwrapped = 0;
     double s12PrevRaw = 0, s12PrevUnwrapped = 0;
-
-    auto unwrap = [](double rawDeg, bool& havePrev, double& prevRaw, double& prevUnwrapped) -> double {
-        if (!havePrev) {
-            havePrev = true;
-            prevRaw = prevUnwrapped = rawDeg;
-            return rawDeg;
-        }
-        double delta = rawDeg - prevRaw;
-        while (delta > 180.0) delta -= 360.0;
-        while (delta <= -180.0) delta += 360.0;
-        prevUnwrapped += delta;
-        prevRaw = rawDeg;
-        return prevUnwrapped;
-    };
 
     foreach (const SParamPoint& sp, points) {
         mm.dataSParam.append(sp);
@@ -580,12 +580,12 @@ void Measurements::populateSParamData(const QList<SParamPoint>& points)
         mag.key = phase.key = fqKey;
 
         mag.value = 20*log10(std::abs(sp.s21));
-        phase.value = unwrap(std::arg(sp.s21)*180.0/M_PI, haveS21Prev, s21PrevRaw, s21PrevUnwrapped);
+        phase.value = unwrapPhaseDeg(std::arg(sp.s21)*180.0/M_PI, haveS21Prev, s21PrevRaw, s21PrevUnwrapped);
         mm.s21MagGraph.add(mag);
         mm.s21PhaseGraph.add(phase);
 
         mag.value = 20*log10(std::abs(sp.s12));
-        phase.value = unwrap(std::arg(sp.s12)*180.0/M_PI, haveS12Prev, s12PrevRaw, s12PrevUnwrapped);
+        phase.value = unwrapPhaseDeg(std::arg(sp.s12)*180.0/M_PI, haveS12Prev, s12PrevRaw, s12PrevUnwrapped);
         mm.s12MagGraph.add(mag);
         mm.s12PhaseGraph.add(phase);
     }

@@ -459,6 +459,7 @@ void Measurements::on_newMeasurement(QString name, qint64 from, qint64 to, qint3
 void Measurements::on_newMeasurement(QString name)
 {
     m_interrupted = false;
+    m_liveS21PhaseHavePrev = false; // fresh phase-unwrap run for on_newSParamPoint(), see its own comment
     while(m_measurements.length() >= g_maxMeasurements)
     {
         deleteRow(0);
@@ -757,6 +758,14 @@ void Measurements::on_newUserDataHeader(QStringList fields)
 
 void Measurements::on_newUserData(RawData _rawData, UserData _userData)
 {
+    // See on_newData()'s own comment -- on_newData(_rawData) below already
+    // drops out early once interrupted, but that's a plain function call,
+    // not a return from *this* function, so this needs its own guard or
+    // everything past it would still run and append anyway.
+    if (m_interrupted || m_measurements.isEmpty()) {
+        return;
+    }
+
     on_newData(_rawData);
 
     m_measurements.last().dataUser.append(_userData);
@@ -804,6 +813,25 @@ void Measurements::on_newData(RawData _rawData, bool _redraw)
         if (m_calibration != nullptr) {
             m_calibration->on_newData(_rawData);
         }
+        return;
+    }
+
+    // Esc/re-clicking Single sets this (interrupt()) to signal "stop", but
+    // several devices (confirmed: BleAnalyzer::stopMeasure()) have no real
+    // wire command to abort a sweep already in flight -- the hardware just
+    // keeps sending whatever points it already committed to, regardless of
+    // what the app does locally. Previously those leftover points kept
+    // landing in m_measurements.last() same as any other point, which is
+    // why a "stopped" scan visibly kept growing/didn't finish until the
+    // device's own sweep did. Now that an empty last() row can get deleted
+    // out from under an in-flight stream (on_measurementComplete(), added
+    // for the "no empty rows" fix), leftover points landing here after
+    // that deletion would silently corrupt whichever *previous* measurement
+    // m_measurements.last() now points to instead. Drop them outright
+    // instead -- the user-visible effect either way is the same (this
+    // scan's data isn't going to be trusted), but this way it's immediate
+    // and can't corrupt anything else.
+    if (m_interrupted) {
         return;
     }
 
@@ -1419,6 +1447,11 @@ double Measurements::computeZ (double R, double X)
 
 void Measurements::on_newS21Data(S21Data _s21Data)
 {
+    // See on_newData()'s own comment.
+    if (m_interrupted || m_measurements.isEmpty()) {
+        return;
+    }
+
     QVector <double> x,y;
     double fq = _s21Data.fq*1000;
 
@@ -1436,6 +1469,37 @@ void Measurements::on_newS21Data(S21Data _s21Data)
 
     data.value = _s21Data.stage;
     m_measurements.last().s21StageGraph.add(data);
+    on_redrawGraphs(true);
+}
+
+void Measurements::on_newSParamPoint(SParamPoint sp)
+{
+    if (m_measurements.isEmpty())
+        return;
+
+    measurement& mm = m_measurements.last();
+    bool firstPoint = mm.dataSParam.isEmpty();
+    mm.dataSParam.append(sp);
+
+    // fq is MHz (matching RawData.fq's convention) -- *1000 to the kHz
+    // every chart key actually uses, same as populateSParamData().
+    double fqKey = sp.fq*1000;
+    QCPGraphData mag, phase;
+    mag.key = phase.key = fqKey;
+    mag.value = 20*log10(std::abs(sp.s21));
+    phase.value = unwrapPhaseDeg(std::arg(sp.s21)*180.0/M_PI, m_liveS21PhaseHavePrev, m_liveS21PhasePrevRaw, m_liveS21PhasePrevUnwrapped);
+    mm.s21MagGraph.add(mag);
+    mm.s21PhaseGraph.add(phase);
+    // S12/S22 deliberately left untouched here: NanoVNA-family hardware
+    // only measures forward S11+S21 in one sweep, so sp.s12 is always the
+    // SParamPoint default (0) for a live capture -- populateSParamData()'s
+    // unconditional S12 mag/phase derivation would otherwise plot -inf dB
+    // from that zeroed value.
+
+    if (firstPoint) {
+        emit sparamDataStarted();
+    }
+
     on_redrawGraphs(true);
 }
 
@@ -1738,6 +1802,23 @@ void Measurements::on_measurementComplete()
     m_previousI = 0;
     m_measuringInProgress = false;
     m_isContinuing = false;
+
+    // A scan that ends with literally no points -- cancelled (Esc, the
+    // analyzer-error watchdog) or errored out before a single reply came
+    // back -- has no practical use sitting in the list: nothing to view,
+    // rescale to, export, or compare against. deleteRow() is the same
+    // machinery on_newMeasurement() already uses to trim old rows past
+    // g_maxMeasurements, so this is just applying it to a just-added row
+    // instead of the oldest one. Reused by every real "a scan just ended"
+    // path (this function's callers: single-scan completion, TDR scan
+    // completion, NanoVNA single-scan completion) -- not reached by
+    // Continuous mode's per-tick continuation, which never calls this
+    // until it's stopped, by which point its row already has whatever data
+    // it accumulated across ticks.
+    if (!isEmpty() && last()->dataRX.isEmpty()) {
+        deleteRow(m_measurements.length() - 1);
+        return;
+    }
 
     // Fill in the just-finished scan's actual point count directly, rather
     // than waiting for the next on_newMeasurement() table rebuild to notice

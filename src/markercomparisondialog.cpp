@@ -1,6 +1,6 @@
 #include "markercomparisondialog.h"
 #include "ui_markercomparisondialog.h"
-#include <markerspopup.h>
+#include <markerspanel.h>
 #include <qcustomplot.h>
 #include <cfloat>
 
@@ -143,7 +143,7 @@ MarkerComparisonDialog::MarkerReadout MarkerComparisonDialog::readoutForMarker(i
     // swept range (e.g. markers placed on one band, then a scan run on a
     // different one) comes back with Markers' no-interpolation-found
     // sentinel (DBL_MAX) in every numeric field -- see the bracketing loop
-    // in Markers::computeMarkerRow(). MarkersPopUp::formatText() already
+    // in Markers::computeMarkerRow(). MarkersPanel::formatText() already
     // guards against this for the Markers table; mirror that guard here
     // instead of formatting DBL_MAX as if it were a real value.
     if (!row.at(4).isValid() || row.at(4).toDouble() == DBL_MAX)

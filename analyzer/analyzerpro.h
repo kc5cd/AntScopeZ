@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QDateTime>
+#include <QTimer>
 #include "baseanalyzer.h"
 #include <updatedialog.h>
 #include <crc32.h>
@@ -45,6 +46,20 @@ class AnalyzerPro : public QObject
     int m_stitchIndex = 0;
     quint32 m_stitchSegCounter = 0;
     void buildStitchSegments(qint64 fqFrom, qint64 fqTo, qint32 totalDots);
+
+    // Scan-silence watchdog -- single-shot, (re)started every time a scan
+    // begins or a data point actually arrives (kickWatchdog(), called from
+    // on_newData()/on_newS21Data()/on_newUserData() and every on_measure*()
+    // that actually starts a transfer), stopped on real completion/cancel
+    // (stopWatchdog()). If it ever fires, nothing has answered for
+    // g_analyzerTimeoutSec (Settings > General) -- device gone, or busy
+    // (held open by another program or another AntScopeZ window). This is
+    // the only thing that ever used to time out a scan that never got a
+    // single reply; see git history / project notes for the pre-watchdog
+    // "spins forever, red indicator stuck" bug this replaces.
+    QTimer* m_watchdogTimer = nullptr;
+    void kickWatchdog();
+    void stopWatchdog();
     // Kicks off segment 0 (or the single, non-stitched request if
     // buildStitchSegments() left m_stitchSegments empty) and sets
     // m_dotsNumber to whatever total on_newData()'s completion check
@@ -100,6 +115,7 @@ signals:
     void measurementCompleteNano();
     void newData (RawData);
     void newS21Data (S21Data);
+    void newSParamPoint (SParamPoint); // real 2-port data, NanoVNA-only today -- bare passthrough from BaseAnalyzer, see its own comment
     void newUserData (RawData, UserData);
     void newUserDataHeader (QStringList);
     void newAnalyzerData (RawData);
@@ -162,6 +178,9 @@ public slots:
     void setCalibrationMode(bool enabled);
 
     void slotFullInfo(const QString& _info);
+
+private slots:
+    void on_watchdogTimeout();
 
 };
 
