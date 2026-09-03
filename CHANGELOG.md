@@ -19,6 +19,10 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
   scan finished normally or was stopped early -- both NanoVNA completion
   paths skipped the TDR finalize step entirely. No UI recovery once hit;
   had to kill the process.
+- TDR Measurement's Result groupbox (peak distance/reflection type/reverse-
+  solve) never refreshed after a normally-completed NanoVNA TDR scan --
+  only after one stopped early -- because it only listened for the signal
+  variant NanoVNA's normal completion never emits.
 
 ### Added
 
