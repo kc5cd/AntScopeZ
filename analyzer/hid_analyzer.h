@@ -89,6 +89,11 @@ private:
     bool m_reportedBusy = false;
     struct hid_device_info* m_devices;
     QThread* m_refreshThread;
+    // Shared by searchAnalyzer(true) and connectAnalyzer() -- both need to
+    // scan the same enumerated device list for the configured analyzer and
+    // handle the "matched but busy" case identically; see either caller's
+    // own comment for why both need it rather than just one.
+    bool tryConnectMatchingDevice(struct hid_device_info* devs, AnalyzerParameters* analyzer);
     bool connectHid(quint32 vid, quint32 pid);
     bool disconnectHid(void);
     qint32 parse (QByteArray arr);
