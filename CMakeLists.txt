@@ -837,6 +837,26 @@ if(WIN32)
         DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 
+    # Settings::programDataPath() (src/settings.cpp) -- the actual runtime
+    # source of truth for cables.txt/itu-regions-defaults.txt/user-guide.md
+    # -- unconditionally resolves to C:\ProgramData\AntScopeZ on Windows
+    # (unlike its Linux/macOS branches, which fall back to sitting next to
+    # the binary). The install(FILES) rule just above only ever staged
+    # these next to the binary, so a real Windows install never actually
+    # had them where programDataPath() looks -- confirmed live 2026-09-03:
+    # "Can't open file: C:/ProgramData/AntScopeZ/cables.txt" opening
+    # Settings on an installed (well, staged-but-not-actually-installed)
+    # build. install(DESTINATION) accepts an absolute path directly,
+    # bypassing CMAKE_INSTALL_PREFIX, so this needs no new mechanism --
+    # just a second copy of the same files at the path the app actually
+    # reads them from. The installer's uninstaller must remove this
+    # directory too (see the NSIS CPack config below) since it sits
+    # outside the tracked install prefix the generated uninstaller
+    # otherwise cleans up automatically.
+    install(FILES ${ANTSCOPE_RUNTIME_FILES}
+        DESTINATION "C:/ProgramData/AntScopeZ"
+    )
+
     # ftd2xx.dll is copied next to the binary by the POST_BUILD custom_command
     # above for a dev/debug build, but that step only touches the build tree
     # -- cmake --install has no rule of its own to carry it into a packaged
@@ -1143,6 +1163,46 @@ if(UNIX AND NOT APPLE)
     # already-compiled-in ANTSCOPE_SHARED_DATA_DIR if CPack's own DEB
     # default (also /usr) ever changes.
     set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
+
+    include(CPack)
+endif()
+
+#
+# Packaging (Windows installer/uninstaller)
+#
+# NSIS chosen over WiX/MSI: matches this project's hobbyist scale and
+# already-informal release process (previously a hand-zipped
+# `cmake --install` staging tree, see BUILDINFO.md), with a lighter
+# toolchain requirement (just makensis.exe) and CPack's built-in NSIS
+# template covering everything needed here without hand-written script.
+# Requires NSIS (https://nsis.sourceforge.io/) installed on the build
+# machine -- not needed for a plain `cmake --build`, only for `cpack`.
+#
+if(WIN32)
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_PACKAGE_NAME "AntScopeZ")
+    set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+    set(CPACK_PACKAGE_VENDOR "k4hez")
+    set(CPACK_NSIS_DISPLAY_NAME "AntScopeZ")
+    # Same .ico already used for WIN32_EXECUTABLE's taskbar/window icon
+    # (see QT_TARGET_RC_ICONS above) -- reused here for the installer UI
+    # and the Programs & Features entry, not a separate asset.
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/AntScopeZ.ico")
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "bin\\\\AntScopeZ.exe")
+    # Registers the Start Menu shortcut CPack's NSIS template creates.
+    set(CPACK_PACKAGE_EXECUTABLES "AntScopeZ" "AntScopeZ")
+    # A GUI app has no business modifying the user's PATH.
+    set(CPACK_NSIS_MODIFY_PATH OFF)
+    # The ProgramData install(FILES) rule above (see its own comment) puts
+    # cables.txt/itu-regions-defaults.txt/user-guide.md outside the tracked
+    # install prefix, so CPack's default generated uninstaller -- which only
+    # removes files it installed under that prefix -- would never clean it
+    # up. RMDir /r here is scoped to exactly the one directory that rule
+    # created; it must never be broadened to touch %APPDATA% (the user's
+    # own settings/calibration data, untouched by design -- see this
+    # plan's own verification step).
+    set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "RMDir /r \\\"$PROGRAMDATA\\\\AntScopeZ\\\"")
 
     include(CPack)
 endif()
