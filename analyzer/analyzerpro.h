@@ -66,6 +66,31 @@ class AnalyzerPro : public QObject
     QTimer* m_watchdogTimer = nullptr;
     void kickWatchdog();
     void stopWatchdog();
+
+    // "Draining" -- once a scan is stopped mid-flight, the device (real or
+    // emulated) has already committed to sending whatever points it was
+    // asked for; neither the classic ASCII nor the V2/LiteVNA64 binary
+    // protocol has a wire-level "abort" command (confirmed against
+    // AntScopeZ's own client and two independent real V2 clients while
+    // building the companion NanoVNA emulator, 2026-09). By default,
+    // on_stopMeasure() waits out whatever's still outstanding in the
+    // *current* in-flight request (not the whole original scan, if
+    // stitched -- no further segments get requested once stopped) and
+    // quietly discards it, bounded by the same watchdog timeout used
+    // everywhere else. Settings > Developer's "Use reconnect to drain
+    // unwanted data" checkbox (g_reconnectToDrain, main.cpp) switches to
+    // closing and reopening the connection instead -- often faster for a
+    // large scan, but not guaranteed to make every device actually discard
+    // what it already queued internally, only that we stop listening and
+    // resync cleanly on the next connect.
+    bool m_isDraining = false;
+    quint32 m_drainTotal = 0;
+    quint32 m_drainReceived = 0;
+    quint32 remainingPointsInCurrentRequest() const;
+    void beginDraining(quint32 total);
+    void beginReconnectDrain();
+    void advanceDraining(); // called from on_newData()/on_newS21Data()/on_newUserData()'s existing "!m_isMeasuring -> stale data" guard
+    void finishDraining(const QString& reason); // "Stopped by user."/"Stopped by timeout..." -- also the idempotency guard for beginReconnectDrain()'s one-shot analyzerFound() connection
     // Kicks off segment 0 (or the single, non-stitched request if
     // buildStitchSegments() left m_stitchSegments empty) and sets
     // m_dotsNumber to whatever total on_newData()'s completion check
@@ -112,6 +137,7 @@ public:
     // its own way to being stitched into one continuous result, not just
     // the truly last one.
     bool isStitchedSweepComplete() const { return m_stitchSweepComplete; }
+    bool isDraining() const { return m_isDraining; }
     void setIsMeasuring (bool _isMeasuring);
     bool sendData(const QByteArray& _data);
     bool sendCommand(const QString& _cmd);
@@ -150,6 +176,14 @@ signals:
     void signalMatch_Profile_B16Received(QByteArray data);
     void crcError();
     void aa30updateComplete();
+    // Draining state -- see m_isDraining's own comment. MainWindow gates
+    // scan-triggering buttons on drainingChanged() and shows
+    // statusMessageChanged()'s text in the status bar; both fire regardless
+    // of which stop trigger caused this (Esc, re-clicking Single, closing a
+    // dialog mid-scan, ...) since they all already funnel through
+    // on_stopMeasure().
+    void drainingChanged(bool draining);
+    void statusMessageChanged(const QString& text);
 
 public slots:
     bool refreshConnection(); // use SelectionParameters::selected

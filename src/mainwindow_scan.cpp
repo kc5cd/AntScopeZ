@@ -471,6 +471,26 @@ void MainWindow::on_tdrStopRequested()
     ui->measurmentsSaveBtn->setEnabled(true);
 }
 
+// AnalyzerPro::drainingChanged() -- see AnalyzerPro::m_isDraining's own
+// comment. Disabling every scan-triggering control here (not just the one
+// the user actually clicked) is deliberate: a second command landing on
+// the wire while the device is still mid-drain is exactly the kind of
+// desync that produced real protocol garbage earlier in this project's
+// history (a mismatched device profile mid-stream).
+void MainWindow::onAnalyzerDrainingChanged(bool draining)
+{
+    ui->singleStart->setEnabled(!draining);
+    ui->continuousStartBtn->setEnabled(!draining);
+    ui->fullBtn->setEnabled(!draining);
+    if (m_tdrScanDialog != nullptr)
+        m_tdrScanDialog->panel()->setScanning(draining);
+}
+
+void MainWindow::onAnalyzerStatusMessageChanged(const QString& text)
+{
+    m_statusLabel->setText(text);
+}
+
 void MainWindow::on_measurementComplete()
 {
     // A stitched (multi-segment) sweep's analyzer backend fires this exact

@@ -13,6 +13,25 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ### Added
 
+- Stopping a scan that's still delivering data (e.g. a large point-count
+  sweep) no longer leaves the app looking stopped while it silently keeps
+  discarding incoming points in the background: scan-triggering controls
+  now stay disabled and a new permanent status-bar label shows draining
+  progress ("Stopping — draining remaining data (N/Total points)...")
+  until it's genuinely done, bounded by the existing analyzer-timeout
+  watchdog so a device that goes silent mid-drain doesn't spin forever.
+  Applies uniformly to every stop trigger (Esc, re-clicking Single, closing
+  a dialog mid-scan, ...), since they already all funnel through one place
+  (`AnalyzerPro::on_stopMeasure()`). Neither the classic ASCII nor the
+  V2/LiteVNA64 binary protocol has a wire-level "abort" command, so this is
+  fundamentally a wait -- Settings > Developer's new "Use reconnect to
+  drain unwanted data" checkbox (off by default) switches to closing and
+  reopening the connection instead, often faster for a large scan, though
+  not guaranteed to make every device discard what it already queued.
+  Status bar is general-purpose (`MainWindow::m_statusLabel`), not
+  draining-specific -- room for more fields later (analyzer type, protocol,
+  points in progress, idle).
+
 - NanoVNA V2 / SAA-2 / LiteVNA64 support (`NanovnaV2Analyzer`): the binary
   register+FIFO protocol, distinct from classic NanoVNA/H/H4's ASCII shell.
   Detected via VID/PID `04B4:0008` in Connect Analyzer alongside the

@@ -166,6 +166,17 @@ Settings::Settings(QWidget *parent) :
     DebugLog::setDetailedErrorsEnabled(false);
     connect(ui->checkBoxReportDetailedErrors, &QCheckBox::clicked, DebugLog::setDetailedErrorsEnabled);
 
+    // Stopping a Scan -- same session-only/off-by-default convention as the
+    // two groups above. See AnalyzerPro::beginReconnectDrain()'s comment
+    // for what this actually changes.
+    ui->checkBoxReconnectToDrain->setChecked(false);
+    extern bool g_reconnectToDrain; // main.cpp
+    g_reconnectToDrain = false;
+    connect(ui->checkBoxReconnectToDrain, &QCheckBox::clicked, [](bool checked) {
+        extern bool g_reconnectToDrain;
+        g_reconnectToDrain = checked;
+    });
+
     // "Data folder" -- the single UserDataDir every save/export/screenshot
     // dialog now defaults to (see FileDialog::userDataDir()), replacing the
     // old per-dialog remembered-last-path settings.

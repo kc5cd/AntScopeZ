@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QStyleFactory>
 #include <QCheckBox>
+#include <QLabel>
 #include <QPushButton>
 #include <QShortcut>
 #include <QMessageBox>
@@ -164,6 +165,14 @@ private:
     TdrScanDialog *m_tdrScanDialog = nullptr;
 
     Print *m_print = nullptr;
+
+    // Permanent status-bar widget -- currently only shows
+    // AnalyzerPro::statusMessageChanged()'s text (scan-stop draining
+    // progress), but deliberately a general-purpose "application state"
+    // label, not a one-off "draining" widget -- see the design discussion
+    // this came out of for the other fields planned to live here later
+    // (analyzer type, points in progress, idle, ascii/binary protocol).
+    QLabel *m_statusLabel = nullptr;
 
     bool m_isContinuos = false;
     int m_dotsNumber = 50;
@@ -490,6 +499,13 @@ private slots:
     void onMeasurementError();
     void onAnalyzerError(const QString& error);
     void on_tableWidgetMeasurmentsContextMenu(const QPoint& pos);
+    // AnalyzerPro::drainingChanged()/statusMessageChanged() -- see
+    // AnalyzerPro::m_isDraining's own comment. Applies uniformly regardless
+    // of which stop trigger fired (Esc, re-clicking Single, closing a
+    // dialog mid-scan, ...) since they all already funnel through
+    // AnalyzerPro::on_stopMeasure().
+    void onAnalyzerDrainingChanged(bool draining);
+    void onAnalyzerStatusMessageChanged(const QString& text);
 
     // multi-tab
 #ifndef NO_MULTITAB

@@ -387,6 +387,15 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(this,&MainWindow::measureOneFq, m_analyzer,&AnalyzerPro::on_measureOneFq);
     connect(m_analyzer, &AnalyzerPro::signalMeasurementError, this, &MainWindow::onMeasurementError);
     connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, &MainWindow::onAnalyzerError);
+    connect(m_analyzer, &AnalyzerPro::drainingChanged, this, &MainWindow::onAnalyzerDrainingChanged);
+    connect(m_analyzer, &AnalyzerPro::statusMessageChanged, this, &MainWindow::onAnalyzerStatusMessageChanged);
+
+    // Permanent status-bar label -- see its own declaration comment
+    // (mainwindow.h) for why this is general-purpose, not draining-only.
+    // QMainWindow::statusBar() lazily creates the bar itself on first call;
+    // mainwindow.ui never declared one.
+    m_statusLabel = new QLabel(tr("Ready"), this);
+    statusBar()->addPermanentWidget(m_statusLabel);
     // These QShortcuts are parented to `this` (MainWindow), so Qt's parent-child
     // ownership deletes them automatically when MainWindow is destroyed -- clang's
     // static analyzer doesn't model that ownership, hence the false "leak" warnings.
