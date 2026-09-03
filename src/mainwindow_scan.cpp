@@ -473,35 +473,22 @@ void MainWindow::on_tdrStopRequested()
 
 void MainWindow::on_measurementComplete()
 {
-    if (m_analyzer->connectionType() == ReDeviceInfo::NANO)
-        return;
-    // One Fq mode (Start==Stop or Range==0) isn't gated by g_developerMode
-    // -- it's reachable in the shipped build regardless. Every wire request
-    // is a single FRX1 now (see on_startOneFq()), so "one batch" here means
-    // one point -- looping (Single: m_oneFqRemaining more times; Continuous:
-    // forever) happens app-side by re-triggering on_startOneFq() from here,
-    // not by asking the device for a bigger batch.
-    //
-    // m_measurements.last() note (why this can't just fall through to the
-    // normal Continuous-scan completion path below): One Fq's on_newData()
-    // never adds anything to m_measurements (it short-circuits straight to
-    // updateOneFqWidget()), so Measurements::on_continueMeasurement()'s
-    // m_measurements.last() would assert on an empty list. Confirmed via
-    // coredumpctl/gdb backtrace, 2026-08-20.
-    if (m_measurements->isOneFqMode()) {
-        if (!m_bInterrupted && (m_isContinuos || m_oneFqRemaining > 1)) {
-            int remaining = m_isContinuos ? 0 : m_oneFqRemaining - 1;
-            on_startOneFq(m_oneFqFreq, remaining, m_isContinuos);
-            return;
-        }
-        on_continuousStartBtn_clicked(false);
-        return;
-    }
-
     // TdrScanPanel-triggered scan -- see m_isTdrScanning's comment in
     // mainwindow.h for why this can't be inferred from the current tab. No
     // Continuous mode (removed 2026-08-21) -- every TDR scan finalizes
     // here, nothing to re-trigger.
+    //
+    // Deliberately checked *before* the NANO early-return below: a NanoVNA-
+    // type connection still emits this exact (non-Nano) measurementComplete()
+    // signal when a scan is stopped early -- AnalyzerPro::on_stopMeasure()'s
+    // "if (wasMeasuring) emit measurementComplete();" -- and a NanoVNA scan's
+    // own normal completion (on_measurementCompleteNano()) never touches
+    // m_isTdrScanning at all. If this ran after the NANO check, a TDR scan
+    // against a NanoVNA device could never finalize either way: the progress
+    // dialog (frameless, window-modal, Esc deliberately disabled -- see
+    // ProgressDlg::reject()) and the panel's Scan button would both stay
+    // stuck with no UI path left to recover. Confirmed live 2026-09-03
+    // against the NanoVNA emulator -- had to kill the process.
     if (m_isTdrScanning) {
         m_measurements->stopTDRProgress();
         m_measurements->on_measurementComplete();
@@ -533,6 +520,31 @@ void MainWindow::on_measurementComplete()
                 m_measurements->setCableVelFactor(savedVf);
             });
         }
+        return;
+    }
+
+    if (m_analyzer->connectionType() == ReDeviceInfo::NANO)
+        return;
+    // One Fq mode (Start==Stop or Range==0) isn't gated by g_developerMode
+    // -- it's reachable in the shipped build regardless. Every wire request
+    // is a single FRX1 now (see on_startOneFq()), so "one batch" here means
+    // one point -- looping (Single: m_oneFqRemaining more times; Continuous:
+    // forever) happens app-side by re-triggering on_startOneFq() from here,
+    // not by asking the device for a bigger batch.
+    //
+    // m_measurements.last() note (why this can't just fall through to the
+    // normal Continuous-scan completion path below): One Fq's on_newData()
+    // never adds anything to m_measurements (it short-circuits straight to
+    // updateOneFqWidget()), so Measurements::on_continueMeasurement()'s
+    // m_measurements.last() would assert on an empty list. Confirmed via
+    // coredumpctl/gdb backtrace, 2026-08-20.
+    if (m_measurements->isOneFqMode()) {
+        if (!m_bInterrupted && (m_isContinuos || m_oneFqRemaining > 1)) {
+            int remaining = m_isContinuos ? 0 : m_oneFqRemaining - 1;
+            on_startOneFq(m_oneFqFreq, remaining, m_isContinuos);
+            return;
+        }
+        on_continuousStartBtn_clicked(false);
         return;
     }
 
@@ -669,6 +681,39 @@ void MainWindow::on_measurementComplete()
 
 void MainWindow::on_measurementCompleteNano()
 {
+    // TdrScanPanel-triggered scan -- see the matching comment and TDR
+    // finalize block in on_measurementComplete(). That function's own
+    // m_isTdrScanning check only ever fires when Stop is clicked mid-scan
+    // (AnalyzerPro::on_stopMeasure()'s synthesized measurementComplete());
+    // a TDR scan against a NanoVNA device that completes *normally* comes
+    // through here instead (measurementCompleteNano(), not
+    // measurementComplete()), so this has to be duplicated rather than
+    // shared -- same reason the graph(0)-clear fix a few lines down is
+    // duplicated too.
+    if (m_isTdrScanning) {
+        m_measurements->stopTDRProgress();
+        m_measurements->on_measurementComplete();
+        m_isTdrScanning = false;
+        m_bInterrupted = true;
+        m_analyzer->setIsMeasuring(false);
+        PopUpIndicator::setIndicatorVisible(false);
+        if (m_tdrScanDialog != nullptr)
+            m_tdrScanDialog->panel()->setScanning(false);
+        ui->measurmentsDeleteBtn->setEnabled(true);
+        ui->measurmentsClearBtn->setEnabled(true);
+        ui->actionExport->setEnabled(true);
+        ui->measurmentsSaveBtn->setEnabled(true);
+        // See the identical restore-after-listeners comment in
+        // on_measurementComplete()'s own TDR block.
+        {
+            double savedVf = m_tdrSavedVelFactor;
+            QTimer::singleShot(0, this, [this, savedVf]() {
+                m_measurements->setCableVelFactor(savedVf);
+            });
+        }
+        return;
+    }
+
 //{ TODO should be checked for autoclibration
     int autoCalibration = m_measurements->getAutoCalibration();
     if (autoCalibration != 0) {

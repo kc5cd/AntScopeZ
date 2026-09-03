@@ -11,6 +11,15 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+### Fixed
+
+- TDR Measurement dialog run against a NanoVNA-type device could get stuck
+  permanently: the progress dialog (frameless, window-modal, Esc disabled)
+  never closed and the panel's Scan button never re-enabled, whether the
+  scan finished normally or was stopped early -- both NanoVNA completion
+  paths skipped the TDR finalize step entirely. No UI recovery once hit;
+  had to kill the process.
+
 ### Added
 
 - Dev-only: Connect Analyzer's COM list offers a "NanoVNA (dev emulator)"
