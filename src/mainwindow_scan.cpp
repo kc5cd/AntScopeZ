@@ -473,6 +473,20 @@ void MainWindow::on_tdrStopRequested()
 
 void MainWindow::on_measurementComplete()
 {
+    // A stitched (multi-segment) sweep's analyzer backend fires this exact
+    // signal once per individual segment on its way to being stitched into
+    // one continuous result, not just on the truly final one -- without
+    // this guard, the *first* segment's completion alone would run every
+    // finalize step below (UI resets, setIsMeasuring(false), etc.), and
+    // AnalyzerPro::on_newData()'s own "!m_isMeasuring -> ignore as stale
+    // leftover data" guard would then silently discard every subsequent
+    // segment's points for the rest of the sweep. Confirmed live
+    // 2026-09-03: a NanoVNA V2 sweep split across two stitched segments
+    // only ever showed the first segment's data on the chart. See
+    // AnalyzerPro::isStitchedSweepComplete()'s own comment.
+    if (m_analyzer != nullptr && !m_analyzer->isStitchedSweepComplete())
+        return;
+
     // TdrScanPanel-triggered scan -- see m_isTdrScanning's comment in
     // mainwindow.h for why this can't be inferred from the current tab. No
     // Continuous mode (removed 2026-08-21) -- every TDR scan finalizes
@@ -681,6 +695,13 @@ void MainWindow::on_measurementComplete()
 
 void MainWindow::on_measurementCompleteNano()
 {
+    // See the identical guard/comment at the top of on_measurementComplete()
+    // -- same reasoning, this is the *other* completion signal a stitched
+    // NanoVNA-family sweep's intermediate segments fire on their way
+    // through.
+    if (m_analyzer != nullptr && !m_analyzer->isStitchedSweepComplete())
+        return;
+
     // TdrScanPanel-triggered scan -- see the matching comment and TDR
     // finalize block in on_measurementComplete(). That function's own
     // m_isTdrScanning check only ever fires when Stop is clicked mid-scan

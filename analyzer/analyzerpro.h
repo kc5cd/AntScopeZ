@@ -45,6 +45,12 @@ class AnalyzerPro : public QObject
     QVector<StitchSegment> m_stitchSegments; // empty == not stitching
     int m_stitchIndex = 0;
     quint32 m_stitchSegCounter = 0;
+    // True except in the exact window between "the current segment's own
+    // request just finished" and "the next segment's request has been
+    // kicked off" -- see advanceStitchSegmentIfNeeded()'s comment and
+    // isStitchedSweepComplete() below for why MainWindow's completion
+    // handlers need this distinction.
+    bool m_stitchSweepComplete = true;
     void buildStitchSegments(qint64 fqFrom, qint64 fqTo, qint32 totalDots);
 
     // Scan-silence watchdog -- single-shot, (re)started every time a scan
@@ -97,6 +103,15 @@ public:
     void updateFirmware (QIODevice *fw);
     void setContinuos(bool isContinuos);
     bool isMeasuring() { return m_isMeasuring; }
+    // False only in the narrow window between one stitched segment's own
+    // completion and the next segment's request actually being sent --
+    // MainWindow's completeMeasurement()/measurementCompleteNano() handlers
+    // check this before doing any real finalization (UI resets,
+    // Measurements::on_measurementComplete(), setIsMeasuring(false), ...),
+    // since each individual segment fires that same completion signal on
+    // its own way to being stitched into one continuous result, not just
+    // the truly last one.
+    bool isStitchedSweepComplete() const { return m_stitchSweepComplete; }
     void setIsMeasuring (bool _isMeasuring);
     bool sendData(const QByteArray& _data);
     bool sendCommand(const QString& _cmd);

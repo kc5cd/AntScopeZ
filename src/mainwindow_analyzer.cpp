@@ -77,7 +77,17 @@ void MainWindow::on_analyzerNameFound(QString name)
     // (Settings::checkUpdatesBtn() -> AnalyzerPro::on_checkUpdatesBtn_clicked(),
     // wired up below).
 
-    if (name.contains("NanoVNA", Qt::CaseInsensitive)) {
+    // Was a name.contains("NanoVNA") substring check -- classic NanoVNA's
+    // slow serial-shell protocol is the actual reason for this cap, not its
+    // name, and that stopped being a reliable proxy the moment NanoVNA V2 /
+    // LiteVNA64 support (NanovnaV2Analyzer, connectionType() ==
+    // ReDeviceInfo::NANOV2) landed: "NanoVNA V2" matched the substring and
+    // got needlessly locked to 100 points despite the protocol supporting
+    // up to ~1023 (V2) / ~25601 (LiteVNA64); "LiteVNA64" didn't match at
+    // all, missing the cap inconsistently in the other direction. Keying
+    // this on connectionType() instead identifies exactly the protocol
+    // this cap is actually about.
+    if (m_analyzer->connectionType() == ReDeviceInfo::NANO) {
         ui->lineEdit_points->setEnabled(false);
         ui->speedAccuracySlider->setEnabled(false);
         setDotsNumber(100);

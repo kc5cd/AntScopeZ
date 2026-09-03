@@ -11,6 +11,53 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+### Added
+
+- NanoVNA V2 / SAA-2 / LiteVNA64 support (`NanovnaV2Analyzer`): the binary
+  register+FIFO protocol, distinct from classic NanoVNA/H/H4's ASCII shell.
+  Detected via VID/PID `04B4:0008` in Connect Analyzer alongside the
+  existing classic NanoVNA entries; distinguishes V2 from LiteVNA64 at
+  connect time via a hardware/firmware version register read. Implemented
+  independently from protocol facts cross-verified against two real
+  clients (NanoVNASaver, libxavna/NanoVNA-QT) -- not a port of either; see
+  the class comment in `analyzer/nanovna_v2_analyzer.h` for the licensing
+  reasoning. Not yet validated end-to-end against anything -- next step is
+  testing against the companion NanoVNA emulator's own binary profile,
+  built earlier for exactly this. Connect Analyzer's dev-emulator
+  convenience row (see above) is now offered twice, once per protocol,
+  since the emulator's pty has no VID/PID to detect which one it's
+  currently speaking.
+- Stitched (multi-segment, >`g_analyzerMaxPoints`) sweeps against any
+  NanoVNA-family device only ever showed the first segment's data: each
+  analyzer backend fires its completion signal once per individual segment
+  on the way to being stitched into one result, not just on the truly last
+  one, and MainWindow's completion handlers unconditionally finalized
+  (`setIsMeasuring(false)`, UI resets, ...) on every one of them --
+  discarding every later segment's points as "stale leftover data" the
+  moment `AnalyzerPro::on_newData()`'s own guard saw measuring had already
+  stopped. New `AnalyzerPro::isStitchedSweepComplete()` lets MainWindow
+  tell an intermediate segment boundary apart from the real end.
+- Reconnecting to a different analyzer type at the same port path could
+  fail every write with "device not open": `AnalyzerPro::createDevice()`
+  left the previous analyzer's serial port to close itself via its
+  deferred `deleteLater()` destructor, but the new analyzer's own
+  `connectAnalyzer()` tries to open a port synchronously, in the same call
+  -- a race invisible with real hardware (never the same port path back to
+  back under a different protocol) but trivial to hit with a single
+  multi-protocol dev target at a fixed path. Now closes the old port
+  synchronously first.
+- Connect Analyzer silently reopened on the USB tab instead of COM whenever
+  the last connection was to any NanoVNA-family device (classic or V2) --
+  the "restore last-used tab" switch had no case for `NANO`/`NANOV2`, so
+  both fell through to USB's default. Pre-existing gap for classic `NANO`,
+  not something the V2 work introduced, just newly exposed by actually
+  reopening the dialog after a NanoVNA-family connection.
+- Point-count lock ("100 points, field disabled") that's meant to be
+  classic-NanoVNA-specific was keyed on a `name.contains("NanoVNA")`
+  substring check, which incorrectly also caught "NanoVNA V2" (and missed
+  "LiteVNA64") the moment those names existed. Now keyed on
+  `connectionType() == ReDeviceInfo::NANO` instead.
+
 ### Fixed
 
 - TDR Measurement dialog run against a NanoVNA-type device could get stuck

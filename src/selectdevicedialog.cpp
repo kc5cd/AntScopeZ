@@ -2,6 +2,7 @@
 #include "ui_selectdevicedialog.h"
 #include "settings.h"
 #include "nanovna_analyzer.h"
+#include "nanovna_v2_analyzer.h"
 #include "ble_analyzer.h"
 #include "style.h"
 
@@ -84,6 +85,16 @@ SelectDeviceDialog::SelectDeviceDialog(bool silent, QWidget *parent) :
     });
     switch(_type) {
     case ReDeviceInfo::Serial:
+    case ReDeviceInfo::NANO:
+    case ReDeviceInfo::NANOV2:
+        // NANO/NANOV2 don't get their own radio button/tab -- both are
+        // only ever shown (and only ever reachable to reconnect to) under
+        // the same "COM" scan as plain Serial devices, see onScan()'s own
+        // grouped case label a bit further down. Without these two here,
+        // the last-used tab silently reverted to USB every time the most
+        // recent connection was to any NanoVNA-family device -- confirmed
+        // live 2026-09-03 while testing NanovnaV2Analyzer, though it was
+        // never NANOV2-specific: NANO had exactly the same gap already.
         ui->radioButtonCOM->setChecked(true);
         break;
     case ReDeviceInfo::BLE:
@@ -199,6 +210,22 @@ void SelectDeviceDialog::onApply(ReDeviceInfo::InterfaceType type,
         }
     } else if (type == (int)ReDeviceInfo::NANO) {
         param = AnalyzerParameters::byName(name);
+    } else if (type == (int)ReDeviceInfo::NANOV2) {
+        // Deliberately NOT AnalyzerParameters::byName(name) -- every NANOV2
+        // row's displayed name is just a placeholder to get
+        // connectAnalyzer() started (VID/PID detection can't tell a real V2
+        // apart from a LiteVNA64, they share 0x04B4:0x0008; only
+        // NanovnaV2Analyzer's own version-register read at connect time
+        // can, which re-picks the correct entry and fires analyzerFound()
+        // with it, same as NANO's own capability-driven identification) --
+        // some of those placeholders (e.g. "NanoVNA V2 (dev emulator)")
+        // aren't an exact match for any registered name, and byName()'s
+        // substring fallback matches in registration order, so a suffixed
+        // label like that would silently resolve to the classic "NanoVNA"
+        // entry (registered first) instead of "NanoVNA V2". Hardcoding the
+        // lookup sidesteps that fragility entirely -- it never needs to be
+        // the *true* final identity, so there's nothing to get wrong here.
+        param = AnalyzerParameters::byName("NanoVNA V2");
     } else if (type == (int)ReDeviceInfo::Serial) {
         //name = "COMPORT";
         param = AnalyzerParameters::byName(name);
@@ -248,17 +275,20 @@ void SelectDeviceDialog::onScan(ReDeviceInfo::InterfaceType type)
     switch(type) {
     case ReDeviceInfo::Serial:
     case ReDeviceInfo::NANO:
+    case ReDeviceInfo::NANOV2:
     {
         ui->tableWidget->horizontalHeaderItem(1)->setText(tr("Port name"));
         QList<ReDeviceInfo> list = ReDeviceInfo::availableDevices(ReDeviceInfo::Serial);
         NanovnaAnalyzer::detectPorts();
+        NanovnaV2Analyzer::detectPorts();
         // QFileInfo::exists() follows the symlink -- true only while the
         // emulator process is actually alive and holding its pty open
         // (dangling symlink / nothing running both read as false), so this
         // is a real "is it running" check, not just "did it ever exist".
         bool devEmulatorAvailable = QFileInfo::exists(kNanoVnaEmulatorPath);
         int bluetooth_rows = 6;
-        int rows = list.size() + NanovnaAnalyzer::portsCount() + bluetooth_rows + (devEmulatorAvailable ? 1 : 0);
+        int rows = list.size() + NanovnaAnalyzer::portsCount() + NanovnaV2Analyzer::portsCount()
+            + bluetooth_rows + (devEmulatorAvailable ? 2 : 0);
         ui->tableWidget->setRowCount(rows);
         int row = 0;
         foreach (const ReDeviceInfo &info, list)
@@ -298,9 +328,38 @@ void SelectDeviceDialog::onScan(ReDeviceInfo::InterfaceType type)
             ui->tableWidget->setItem(row, 1, item);
             row++;
         }
+        foreach (const QSerialPortInfo &info, NanovnaV2Analyzer::availablePorts())
+        {
+            showPortInfo(info);
+            // "NanoVNA V2" is a placeholder display name -- see onApply()'s
+            // NANOV2 comment for why detection alone can't distinguish a
+            // real V2 from a LiteVNA64.
+            QTableWidgetItem* item = new QTableWidgetItem(QStringLiteral("NanoVNA V2"));
+            item->setData(Qt::UserRole+1, (int)ReDeviceInfo::NANOV2);
+            ui->tableWidget->setItem(row, 0, item);
+
+            item = new QTableWidgetItem(info.portName().trimmed());
+            ui->tableWidget->setItem(row, 1, item);
+            row++;
+        }
         if (devEmulatorAvailable) {
+            // Two rows, not one -- the emulator's own pty has no VID/PID at
+            // all (confirmed: QSerialPortInfo::availablePorts() never lists
+            // pty devices), so real detection can never distinguish which
+            // protocol it's currently speaking; that's a GUI setting on the
+            // emulator's own side (its "Device" combo). Offering both lets
+            // whichever one matches actually work, instead of only ever
+            // being reachable as classic ASCII.
             QTableWidgetItem* item = new QTableWidgetItem(QStringLiteral("NanoVNA (dev emulator)"));
             item->setData(Qt::UserRole+1, (int)ReDeviceInfo::NANO);
+            ui->tableWidget->setItem(row, 0, item);
+
+            item = new QTableWidgetItem(kNanoVnaEmulatorPath);
+            ui->tableWidget->setItem(row, 1, item);
+            row++;
+
+            item = new QTableWidgetItem(QStringLiteral("NanoVNA V2 (dev emulator)"));
+            item->setData(Qt::UserRole+1, (int)ReDeviceInfo::NANOV2);
             ui->tableWidget->setItem(row, 0, item);
 
             item = new QTableWidgetItem(kNanoVnaEmulatorPath);

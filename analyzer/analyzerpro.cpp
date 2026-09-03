@@ -8,6 +8,7 @@
 #include "hid_analyzer.h"
 #include "com_analyzer.h"
 #include "nanovna_analyzer.h"
+#include "nanovna_v2_analyzer.h"
 #include "ble_analyzer.h"
 #include "settings.h"
 
@@ -249,6 +250,7 @@ void AnalyzerPro::clearStitchState()
     m_stitchSegments.clear();
     m_stitchIndex = 0;
     m_stitchSegCounter = 0;
+    m_stitchSweepComplete = true;
 }
 
 void AnalyzerPro::buildStitchSegments(qint64 fqFrom, qint64 fqTo, qint32 totalDots)
@@ -304,11 +306,26 @@ void AnalyzerPro::advanceStitchSegmentIfNeeded()
         return;
     m_stitchSegCounter++;
     const StitchSegment& seg = m_stitchSegments.at(m_stitchIndex);
-    if (m_stitchSegCounter > (quint32)seg.dots && m_stitchIndex + 1 < m_stitchSegments.size()) {
-        m_stitchIndex++;
-        m_stitchSegCounter = 0;
-        const StitchSegment& next = m_stitchSegments.at(m_stitchIndex);
-        m_baseAnalyzer->startMeasure(next.fqFrom, next.fqTo, next.dots);
+    if (m_stitchSegCounter > (quint32)seg.dots) {
+        if (m_stitchIndex + 1 < m_stitchSegments.size()) {
+            // More segments queued -- the current segment's own analyzer
+            // backend is about to fire its own completeMeasurement()/
+            // measurementCompleteNano() once its request-level framing
+            // settles (e.g. NanovnaAnalyzer's "ch> " prompt,
+            // NanovnaV2Analyzer's FIFO byte count reaching zero), same as
+            // it would for a real final segment -- that signal is an
+            // internal segment boundary, not the real end of the stitched
+            // sweep. isStitchedSweepComplete() reflects that until the
+            // *next* segment's own completion arrives and this function
+            // sets it back to true below.
+            m_stitchSweepComplete = false;
+            m_stitchIndex++;
+            m_stitchSegCounter = 0;
+            const StitchSegment& next = m_stitchSegments.at(m_stitchIndex);
+            m_baseAnalyzer->startMeasure(next.fqFrom, next.fqTo, next.dots);
+        } else {
+            m_stitchSweepComplete = true; // genuinely the last segment
+        }
     }
 }
 
@@ -905,6 +922,22 @@ bool AnalyzerPro::createDevice(const SelectionParameters& param, BaseAnalyzer* a
     if (tmp != nullptr) {
         emit tmp->analyzerDisconnected();
         tmp->disconnect();
+        // Synchronous, not left to tmp's destructor -- deleteLater() defers
+        // destruction to the next event-loop pass, so without this the old
+        // analyzer's QSerialPort (if it has one) can still be holding its
+        // port open at the exact moment the *new* analyzer's own
+        // connectAnalyzer() tries to open a port of its own, right below in
+        // this same function, synchronously. Invisible with real hardware
+        // (a fresh connection is essentially never to the identical port
+        // path a moment after disconnecting from it under a different
+        // analyzer type) but trivially reproducible with a single
+        // multi-protocol dev target sitting at a fixed path -- confirmed
+        // live 2026-09-03 reconnecting the NanoVNA emulator from classic to
+        // V2: every write from NanovnaV2Analyzer's very first byte failed
+        // with "device not open" because the prior NanovnaAnalyzer's
+        // QSerialPort hadn't actually closed yet. closeComPort() is a
+        // virtual BaseAnalyzer no-op by default, safe to call unconditionally.
+        tmp->closeComPort();
         tmp->deleteLater();
     }
     m_baseAnalyzer = nullptr;
@@ -933,6 +966,11 @@ bool AnalyzerPro::createDevice(const SelectionParameters& param, BaseAnalyzer* a
     case ReDeviceInfo::NANO:
     {
         m_baseAnalyzer = new NanovnaAnalyzer(this);
+    }
+        break;
+    case ReDeviceInfo::NANOV2:
+    {
+        m_baseAnalyzer = new NanovnaV2Analyzer(this);
     }
         break;
     case ReDeviceInfo::BLE:
