@@ -91,6 +91,7 @@ private:
     QVector<std::complex<double>> m_s11Buffer;
     static std::complex<double> parseReIm(const QString& line);
     static std::complex<double> impedanceFromReflection(std::complex<double> gamma); // 50 ohm reference, shared by toRawData() and emitPoint()
+    static SParamPoint makeSParamPoint(double fqMHz, std::complex<double> s11, std::complex<double> s21); // NanoVNA-family is forward-only (no S12/S22) -- shared by the WAIT_NANO_DATA_S21 fallback pass and emitPoint()
 
     // "scan" command capability probe/state -- see ScanSupport's comment.
     ScanSupport m_scanSupport = ScanSupport::Unknown;

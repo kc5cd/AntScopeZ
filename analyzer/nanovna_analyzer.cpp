@@ -209,13 +209,8 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                         // stray extra line -- ignore, same as the S11 pass above
                     } else {
                         double fq = m_listFQ.at(m_fqCursor).toDouble() * 0.000001;
+                        std::complex<double> s11 = m_s11Buffer.at(m_fqCursor);
                         std::complex<double> s21 = parseReIm(data);
-                        SParamPoint sp;
-                        sp.fq = fq;
-                        sp.s11 = m_s11Buffer.at(m_fqCursor);
-                        sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
-                        sp.s21 = s21;
-                        sp.s22 = std::complex<double>(0,0);
                         m_fqCursor++;
                         // Same guard as the S11 pass above (WAIT_NANO_DATA's
                         // "if (raw.fq > 0)") and for the same reason: the
@@ -229,7 +224,7 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                         // that's what keeps this pass in sync with the S11
                         // pass's own identical one-bogus-entry absorption.
                         if (fq > 0) {
-                            emit newSParamPoint(sp);
+                            emit newSParamPoint(makeSParamPoint(fq, s11, s21));
                         }
                     }
                 }
@@ -516,13 +511,7 @@ void NanovnaAnalyzer::emitPoint(double fqMHz, std::complex<double> s11, std::com
     raw.x = z.imag();
     emit newData(raw);
 
-    SParamPoint sp;
-    sp.fq = fqMHz;
-    sp.s11 = s11;
-    sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
-    sp.s21 = s21;
-    sp.s22 = std::complex<double>(0,0);
-    emit newSParamPoint(sp);
+    emit newSParamPoint(makeSParamPoint(fqMHz, s11, s21));
 }
 
 std::complex<double> NanovnaAnalyzer::parseReIm(const QString& line)
@@ -540,6 +529,17 @@ std::complex<double> NanovnaAnalyzer::impedanceFromReflection(std::complex<doubl
     double r = (1 - re*re - im*im) / denom * 50;
     double x = (2*im) / denom * 50;
     return std::complex<double>(r, x);
+}
+
+SParamPoint NanovnaAnalyzer::makeSParamPoint(double fqMHz, std::complex<double> s11, std::complex<double> s21)
+{
+    SParamPoint sp;
+    sp.fq = fqMHz;
+    sp.s11 = s11;
+    sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
+    sp.s21 = s21;
+    sp.s22 = std::complex<double>(0,0);
+    return sp;
 }
 
 void NanovnaAnalyzer::finishMeasurementSegment()
