@@ -621,10 +621,11 @@ void MainWindow::on_importFinished(double _fqMin_khz, double _fqMax_khz)
     ui->measurmentsClearBtn->setEnabled(true);
 
     // S21 tab stays hidden (see mainwindow_tabs.cpp's createTabs()) until
-    // a measurement actually has real 2-port data to show -- a .s2p
-    // import populating dataSParam, currently the only source (live
-    // capture is a separate, hardware-gated dead end -- see
-    // SParamPoint's own comment).
+    // a measurement actually has real 2-port data to show. A .s2p import
+    // is one source (handled here); a live NanoVNA capture is the other
+    // (handled live, see Measurements::sparamDataStarted()'s connection
+    // in this file's constructor wiring) -- both populate dataSParam the
+    // same way, this check just also covers the import path specifically.
     measurement* justImported = m_measurements->last();
     if ((justImported != nullptr) && !justImported->dataSParam.isEmpty()) {
         ui->tabWidget->setTabVisible(ui->tabWidget->indexOf(m_tab_s21), true);

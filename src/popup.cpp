@@ -52,16 +52,25 @@ void PopUp::init()
     setAttribute(Qt::WA_TranslucentBackground);
     // WA_ShowWithoutActivating kept this window from ever becoming the active
     // window, which on this window manager also meant it never received mouse
-    // input at all -- the pane could never be dragged (see the identical fix
-    // in MarkersPopUp). The resulting false "main window lost focus" is
-    // exempted in MainWindow::event() instead.
+    // input at all -- the pane could never be dragged (an identical fix used
+    // to live in the now-docked MarkersPopUp too, see git history). The
+    // resulting false "main window lost focus" is exempted in MainWindow::
+    // event() instead.
 
     animation.setTargetObject(this);
     animation.setPropertyName("popupOpacity");
     connect(&animation, &QAbstractAnimation::finished, this, &PopUp::hide);
 
     label.setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    label.setStyleSheet("QLabel { color : " + m_textColor +
+    // Was missing the ';' right after m_textColor -- "color : whitemargin-
+    // top: 6px..." isn't a valid CSS color, so Qt silently dropped the
+    // whole color declaration and this always rendered in whatever the
+    // default QLabel text color happened to be, never the intended
+    // m_textColor. Against m_bgColor's own dark translucent background
+    // (see paintEvent()), that read as permanently unreadable dark-on-dark
+    // regardless of setTextColor() ever being called -- confirmed via the
+    // Screenshot "Image added to clipboard" notification, 2026-09-01.
+    label.setStyleSheet("QLabel { color : " + m_textColor + ";"
                         "margin-top: 6px;"
                         "margin-bottom: 6px;"
                         "margin-left: 10px;"

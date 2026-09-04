@@ -284,6 +284,16 @@ private:
 
     QString m_currentTab;
 
+    // Running phase-unwrap state for on_newSParamPoint()'s live S21
+    // capture -- unlike populateSParamData()'s batch import (which
+    // unwraps across a whole already-collected list in one call), a live
+    // scan arrives one point at a time, so this state has to persist
+    // across calls instead of living on the stack. Reset per measurement
+    // in on_newMeasurement().
+    bool m_liveS21PhaseHavePrev = false;
+    double m_liveS21PhasePrevRaw = 0;
+    double m_liveS21PhasePrevUnwrapped = 0;
+
 //    measurement m_measurements[MAX_MEASUREMENTS];
     QList <measurement> m_measurements;
     QList <measurement> m_viewMeasurements;
@@ -473,6 +483,14 @@ private:
     // existing 1-port S11/Z11 pair -- format decoding is identical
     // regardless of which parameter it's for.
     static std::complex<double> sparamFromFormat(int iFormat, double v1, double v2);
+    // std::arg() wraps into (-180, 180] degrees; a real transmission
+    // phase can rack up many full turns across a sweep, so this
+    // accumulates the shortest-path delta between consecutive points
+    // instead (same technique as numpy.unwrap()). Shared by
+    // populateSParamData()'s batch import and on_newSParamPoint()'s live
+    // capture -- the math is identical, only where the have/prev state
+    // lives differs (stack-local for a batch, member fields for live).
+    static double unwrapPhaseDeg(double rawDeg, bool& havePrev, double& prevRaw, double& prevUnwrapped);
     // COL_POINTS cell text -- "--" until a scan/import finishes, then the
     // point count tagged with "(s1p)"/"(s2p)" so the Measurements list
     // itself shows which rows actually have 2-port data (dataSParam),
@@ -488,12 +506,17 @@ signals:
     void measurementCanceled();
     void oneFqCanceled();
     void selectMeasurement(int row, int col);
+    // First real 2-port point of a live capture -- MainWindow listens for
+    // this to reveal the S21 tab the same way on_importFinished() does
+    // for a .s2p import, just fired live instead of after the fact.
+    void sparamDataStarted();
 
 public slots:
     void on_newAnalyzerData(RawData _rawData);
     void on_newDataRedraw(RawData _rawData);
     void on_newData(RawData _rawData, bool _redraw=false);
     void on_newS21Data(S21Data _s21Data);
+    void on_newSParamPoint(SParamPoint sp);
     void on_newUserDataHeader(QStringList);
     void on_newUserData(RawData, UserData);
     void on_newMeasurement(QString name);

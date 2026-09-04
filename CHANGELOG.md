@@ -11,6 +11,74 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-09-01
+
+### Added
+
+- NanoVNA: real 2-port S11+S21 on every scan (was S11-only), plus an
+  opportunistic ASCII/binary `scan` fast path when the firmware supports
+  it. Not yet validated against real hardware.
+- Analyzer scan-timeout watchdog: a scan that goes silent for too long
+  (device unreachable, or busy -- already held open by another program or
+  another AntScopeZ window) now fails with an error instead of leaving
+  the busy indicator/wait cursor stuck forever. Timeout is configurable,
+  Settings > General > "Analyzer timeout" (default 8s).
+  USB/HID and Serial connections also now detect "device present but
+  busy" specifically, both at launch and while polling for a device.
+- Analyzer errors now show in a proper non-modal dialog (was a small
+  banner too short to hold a real sentence) -- timestamped, includes
+  whatever diagnostic detail is available (OS error string, Qt error
+  enum, elapsed-silence duration, raw bytes on a CRC mismatch). BLE's
+  own connection/protocol errors, previously compiled out entirely
+  outside a debug build, are now available at runtime behind Settings >
+  Developer > Error Reporting & Logging > "Report Detailed Errors" (off
+  by default).
+- Help > User Guide: a lightweight, non-modal in-app viewer for
+  `docs/user-guide.md` (no HTML rendering engine) -- the guide's own
+  self-links (jumping to a section) work.
+
+### Changed
+
+- `SUPPORTED_DEVICES.md` merged into `docs/user-guide.md` as its own
+  section, so it's reachable from the in-app viewer above; the
+  standalone file/page is gone (index.md, README.md, and the GitHub
+  Pages nav all point at the merged section instead).
+
+- Markers table: docked under the plot tabs (a resizable splitter) as a
+  normal themed table, instead of a floating semi-transparent popup.
+  Visibility now follows the View > Markers Hint checkbox alone --
+  toggling it on shows the table (headers only, if empty) immediately,
+  rather than only once a marker exists.
+- Measurements list: a scan that ends with zero points (cancelled,
+  errored, or timed out before anything arrived) is no longer left
+  behind as an empty entry.
+
+### Fixed
+
+- File dialogs: "Look in:" now shows translated (es/ja/uk) instead of
+  falling back to English -- same class of gap, and same fix, as the
+  "Files of type:" label fixed earlier (a corrected-mnemonic override
+  shipped alongside Qt's own translation, since Qt's own upstream
+  catalog has the same exact-string mismatch for this one too).
+- Esc / re-clicking Single or Continuous now actually stops the scan:
+  previously, data still arriving from a device with no real wire-abort
+  command (e.g. BLE) kept getting processed as if the scan were still
+  running -- corrupting whichever measurement was still open, and, for
+  Single, repeatedly re-placing the "lowest SWR" auto-marker for every
+  leftover point (up to one per free marker slot).
+- Continuous mode: stopping it now updates the Measurements list's
+  Points column immediately, instead of only catching up whenever the
+  next scan happened to rebuild the table.
+- A marker placed right as a chart's X axis is still unscaled (e.g. just
+  after connecting/reconnecting, before a scan has plotted anything)
+  could crash the app on the next click anywhere on that chart.
+- App could crash on close after having connected to an analyzer (double
+  free of the docked markers table).
+- The "Image added to clipboard" notification (Screenshot dialog) was
+  unreadable in every theme -- a missing `;` in its stylesheet silently
+  dropped the intended text color entirely. Also now follows the active
+  theme instead of a fixed dark box.
+
 ## [2.2.2] - 2026-08-28
 
 ### Added

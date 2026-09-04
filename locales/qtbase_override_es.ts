@@ -31,5 +31,21 @@
         <source>Files of &amp;type:</source>
         <translation>Ficheros de &amp;tipo:</translation>
     </message>
+    <message>
+        <!--
+          Same bug, same date (2026-08-24, just not caught in the same
+          pass): qtbase_es.ts only has "Look in:" (no ampersand), but the
+          real widget requests "&amp;Look in:" (confirmed via `strings`
+          against libQt6Widgets.so.6, same as "Files of &amp;type:" above).
+          Re-uses qtbase_es.qm's own existing (correct) wording for
+          "Ver en:". Unlike "Files of &amp;type:" above, there's no
+          natural shared letter with English "Look" here, so the
+          mnemonic is placed on the first letter of the operative word
+          ("Ver") instead, the usual fallback when there's no
+          coincidental match.
+        -->
+        <source>&amp;Look in:</source>
+        <translation>&amp;Ver en:</translation>
+    </message>
 </context>
 </TS>

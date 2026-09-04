@@ -80,6 +80,13 @@ private:
     volatile bool m_bootMode;
     QMutex m_mutexSearch;
     QMutex m_mutexRead;
+    // Debounces the "found but couldn't open" busy notice in
+    // searchAnalyzer() -- that runs off a 1s poll while disconnected, so
+    // without this it would re-emit signalAnalyzerError() every tick for as
+    // long as the device stays busy. Reset once it either opens
+    // successfully or drops out of enumeration entirely (see
+    // searchAnalyzer()).
+    bool m_reportedBusy = false;
     struct hid_device_info* m_devices;
     QThread* m_refreshThread;
     bool connectHid(quint32 vid, quint32 pid);

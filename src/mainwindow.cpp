@@ -3,7 +3,6 @@
 #include "popupindicator.h"
 #include "analyzer/customanalyzer.h"
 #include "analyzer/nanovna_analyzer.h"
-#include "Notification.h"
 #include "glwidget.h"
 #include "CustomPlot.h"
 #include "selectdevicedialog.h"
@@ -66,6 +65,16 @@ int g_analyzerMaxPoints = 1000;
 // developer/debug feature. Default off, matching pre-existing behavior for
 // anyone who never had -developer passed.
 bool g_extendedChartZoom = false;
+// "Analyzer timeout" (Settings > General) -- seconds a scan can go without
+// receiving a single data point before AnalyzerPro's watchdog treats it as
+// failed (device gone, or busy -- already held open by another program or
+// another AntScopeZ window) and surfaces an error instead of leaving the
+// busy indicator/wait cursor stuck forever. Restarts on every point
+// actually received, not just once at scan start, so it's "no progress for
+// N seconds," not "whole scan must finish in N seconds" -- a long, healthy
+// continuous sweep won't trip it. See AnalyzerPro's watchdog timer
+// (analyzer/analyzerpro.cpp).
+int g_analyzerTimeoutSec = 8;
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -145,6 +154,21 @@ MainWindow::MainWindow(QWidget *parent) :
     // Deferred one event-loop tick, same fix shape as resizeEvent()'s own
     // fast-drag follow-up just below.
     connect(ui->splitter, &QSplitter::splitterMoved, this, [this](int, int) {
+        QTimer::singleShot(0, this, [this]() { resizeWnd(); });
+    });
+
+    // rightPane's own vertical splitter: plot tabs on top, the markers
+    // table docked underneath (see markersPanelContainer in mainwindow.ui,
+    // and Markers' constructor for what actually lands there). tabWidget
+    // absorbs resize space, same reasoning as the horizontal splitter
+    // above; the markers table only needs enough room to be usable, and
+    // grows via its own scrollbars beyond that (see MarkersPanel).
+    ui->splitterRightPane->setStretchFactor(0, 1);
+    ui->splitterRightPane->setStretchFactor(1, 0);
+    ui->splitterRightPane->setSizes({600, 160});
+    // Same deferred-resizeWnd() reasoning as the horizontal splitter above
+    // -- dragging this one resizes m_smithWidget's page too.
+    connect(ui->splitterRightPane, &QSplitter::splitterMoved, this, [this](int, int) {
         QTimer::singleShot(0, this, [this]() { resizeWnd(); });
     });
 
@@ -266,6 +290,7 @@ MainWindow::MainWindow(QWidget *parent) :
     g_pointsWarnThreshold = m_settings->value("pointsWarnThreshold", 1000).toInt();
     g_analyzerMaxPoints = m_settings->value("analyzerMaxPoints", 1000).toInt();
     g_extendedChartZoom = m_settings->value("extendedChartZoom", false).toBool();
+    g_analyzerTimeoutSec = m_settings->value("analyzerTimeoutSec", 8).toInt();
     m_activeThemeIndex = m_settings->value("activeTheme", 0).toInt();
     m_settings->endGroup();
 
@@ -361,11 +386,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(this,SIGNAL(stopMeasure()), m_analyzer, SLOT(on_stopMeasure()));
     connect(this,&MainWindow::measureOneFq, m_analyzer,&AnalyzerPro::on_measureOneFq);
     connect(m_analyzer, &AnalyzerPro::signalMeasurementError, this, &MainWindow::onMeasurementError);
-    connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, [=] (const QString& error) {
-        QRect r = ui->tabWidget->rect();
-        QRect rr = QRect(40, 50, r.width()-80, 40);
-        Notification::showMessage(error, Qt::red, rr, 5000, m_mainWindow);
-    });
+    connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, &MainWindow::onAnalyzerError);
     // These QShortcuts are parented to `this` (MainWindow), so Qt's parent-child
     // ownership deletes them automatically when MainWindow is destroyed -- clang's
     // static analyzer doesn't model that ownership, hence the false "leak" warnings.
@@ -498,6 +519,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(m_analyzer, &AnalyzerPro::newData, m_measurements, &Measurements::on_newDataRedraw);
     connect(m_analyzer, &AnalyzerPro::newS21Data, m_measurements, &Measurements::on_newS21Data);
+    connect(m_analyzer, &AnalyzerPro::newSParamPoint, m_measurements, &Measurements::on_newSParamPoint);
+    // Reveal the S21 tab on the first point of a live 2-port capture, same
+    // as on_importFinished() does for a .s2p import (mainwindow_measurements_io.cpp).
+    connect(m_measurements, &Measurements::sparamDataStarted, this, [this](){
+        ui->tabWidget->setTabVisible(ui->tabWidget->indexOf(m_tab_s21), true);
+    });
     connect(m_analyzer, &AnalyzerPro::newAnalyzerData, m_measurements, &Measurements::on_newAnalyzerData);
     connect(m_analyzer, &AnalyzerPro::newUserData, m_measurements, &Measurements::on_newUserData);
     connect(m_analyzer, &AnalyzerPro::newUserDataHeader, m_measurements, &Measurements::on_newUserDataHeader);
@@ -523,6 +550,12 @@ MainWindow::MainWindow(QWidget *parent) :
     if(m_markers == NULL)
     {
         m_markers = new Markers(this);
+        // Docks m_markers' MarkersPanel (built parentless, see Markers'
+        // constructor) into mainwindow.ui's right-pane splitter, below the
+        // plot tabs -- it used to be a top-level floating Qt::Tool window
+        // and never needed placing anywhere.
+        QVBoxLayout* markersPanelLayout = qobject_cast<QVBoxLayout*>(ui->markersPanelContainer->layout());
+        markersPanelLayout->addWidget(m_markers->markersHint());
         m_markers->setWidgets(m_swrWidget,
                               m_phaseWidget,
                               m_rsWidget,
@@ -532,8 +565,6 @@ MainWindow::MainWindow(QWidget *parent) :
                               m_s21Widget,
                               m_smithWidget);
         m_markers->setMeasurements(m_measurements);
-        connect(this, SIGNAL(focus(bool)), m_markers,SLOT(on_focus(bool)));
-        connect(this, SIGNAL(mainWindowPos(int,int)), m_markers,SLOT(on_mainWindowPos(int,int)));
         connect(this, SIGNAL(currentTab(QString)), m_markers, SLOT(on_currentTab(QString)));
         connect(this, SIGNAL(rescale()), m_markers, SLOT(rescale()));
         connect(m_analyzer, SIGNAL(newMeasurement(QString)), m_markers, SLOT(on_newMeasurement(QString)));
@@ -1015,6 +1046,7 @@ MainWindow::~MainWindow()
     m_settings->setValue("pointsWarnThreshold", g_pointsWarnThreshold);
     m_settings->setValue("analyzerMaxPoints", g_analyzerMaxPoints);
     m_settings->setValue("extendedChartZoom", g_extendedChartZoom);
+    m_settings->setValue("analyzerTimeoutSec", g_analyzerTimeoutSec);
     m_settings->endGroup();
 
     m_settings->beginGroup("Cable");
@@ -1082,22 +1114,22 @@ bool MainWindow::event(QEvent * e)
     }else if (e->type() == QEvent::WindowDeactivate)
     {
         // Only our own floating popups taking OS focus should be exempted
-        // here (they need real activation to receive clicks -- see
-        // MarkersPopUp::focusShow() and PopUp's WA_ShowWithoutActivating
-        // note). Checking "any app window is active" instead of
-        // "specifically one of our popups" used to also suppress this signal
-        // when Settings/Connect Analyzer/an Import file dialog opened, so the
-        // popup (Qt::WindowStaysOnTopHint) never got told to hide and sat on
-        // top of those dialogs eating their clicks.
+        // here (they need real activation to receive clicks -- see PopUp's
+        // WA_ShowWithoutActivating note). Checking "any app window is
+        // active" instead of "specifically one of our popups" used to also
+        // suppress this signal when Settings/Connect Analyzer/an Import
+        // file dialog opened, so the popup (Qt::WindowStaysOnTopHint)
+        // never got told to hide and sat on top of those dialogs eating
+        // their clicks.
         //
-        // m_measurements->graphHint() used to be checked here too -- dropped
-        // along with the getter itself once that panel was docked into
-        // mainwindow.ui (see setGraphHintWidgets()): a plain child widget has
-        // no WM identity of its own, so it can never be qApp->activeWindow()
-        // and never needed this exemption.
+        // m_measurements->graphHint() used to be checked here too, and
+        // m_markers->markersHint() (MarkersPopUp) the same once it was
+        // docked into mainwindow.ui as MarkersPanel -- both dropped here (the
+        // getters themselves are still used elsewhere): a plain child widget
+        // has no WM identity of its own, so it can never be
+        // qApp->activeWindow() and never needs this exemption.
         QWidget *active = qApp->activeWindow();
-        bool ownPopupActive = (m_markers && active == static_cast<QWidget*>(m_markers->markersHint())) ||
-                               (m_measurements && active == static_cast<QWidget*>(m_measurements->graphBriefHint()));
+        bool ownPopupActive = m_measurements && active == static_cast<QWidget*>(m_measurements->graphBriefHint());
         if (!ownPopupActive)
             emit focus(false);
     }else if (e->type() == QEvent::WindowStateChange)
@@ -1258,7 +1290,13 @@ void MainWindow::setWidgetsSettings()
      //| Qt::Vertical | Qt::Horizontal
     m_swrWidget->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
     m_swrWidget->axisRect()->setRangeZoom(Qt::Horizontal);// | Qt::Vertical);
-    m_swrWidget->axisRect()->setRangeDrag(Qt::Horizontal | Qt::Vertical);
+    // Horizontal only -- SWR's Y-axis is meant to stay anchored to its
+    // MIN_SWR..MAX_SWR (1-10) range; the real Y-zoom feature is Ctrl+scroll
+    // (handled separately in mainwindow_mouse.cpp), not this axis-rect
+    // interaction. Leaving Qt::Vertical here let a plain click-drag
+    // anywhere on the chart pan the Y range around within that clamp,
+    // which read as the scale randomly shifting.
+    m_swrWidget->axisRect()->setRangeDrag(Qt::Horizontal);
     clampAxisRange(m_swrWidget->xAxis, 0, 10000000);
     clampAxisRange(m_swrWidget->yAxis, MIN_SWR, MAX_SWR);
     // QCPAxis's default number format ('g', see its ctor) switches to

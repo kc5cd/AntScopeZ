@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(AntScopeZ
-    VERSION 2.2.2
+    VERSION 2.2.4
     DESCRIPTION "AntScopeZ Antenna Analyzer Application"
     LANGUAGES C CXX
 )
@@ -12,11 +12,11 @@ project(AntScopeZ
 # Debian's own version-format rules. This suffix is for humans instead: it
 # only feeds ANTSCOPEZ_VER (About box, title bar, startup log line -- see
 # target_compile_definitions() below), so an in-progress build reads
-# "2.2.2-dev" instead of silently claiming to be the exact 2.2.2 release.
-# Clear it to an empty string right when 2.2.2 actually ships (matching
-# commit + `v2.2.2` tag, same pattern as `v2.2.1`/`v2.2.0`), then bump
+# "2.2.4-dev" instead of silently claiming to be the exact 2.2.4 release.
+# Clear it to an empty string right when 2.2.4 actually ships (matching
+# commit + `v2.2.4` tag, same pattern as `v2.2.3`/`v2.2.2`), then bump
 # PROJECT_VERSION and set this back to "-dev" to start the next cycle.
-set(ANTSCOPEZ_VER_SUFFIX "")
+set(ANTSCOPEZ_VER_SUFFIX "-dev")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -129,7 +129,7 @@ set(ANTSCOPE_SOURCES
     src/mainwindow_tools.cpp
     src/markercomparisondialog.cpp
     src/markers.cpp
-    src/markerspopup.cpp
+    src/markerspanel.cpp
     src/measurements.cpp
     src/measurements_autocal.cpp
     src/measurements_farend.cpp
@@ -159,6 +159,7 @@ set(ANTSCOPE_SOURCES
     src/tdrscanpanel.cpp
     src/unitrequestdialog.cpp
     src/updatedialog.cpp
+    src/userguidedialog.cpp
 
     analyzer/analyzerdata.cpp
     analyzer/analyzerpro.cpp
@@ -202,7 +203,7 @@ set(ANTSCOPE_HEADERS
     src/mainwindow.h
     src/markercomparisondialog.h
     src/markers.h
-    src/markerspopup.h
+    src/markerspanel.h
     src/measurements.h
     src/modelesspopup.h
     src/Notification.h
@@ -225,6 +226,7 @@ set(ANTSCOPE_HEADERS
     src/tdrscanpanel.h
     src/unitrequestdialog.h
     src/updatedialog.h
+    src/userguidedialog.h
 
     analyzer/analyzerdata.h
     analyzer/analyzerparameters.h
@@ -634,6 +636,12 @@ endif()
 set(ANTSCOPE_RUNTIME_FILES
     shared/cables.txt
     shared/itu-regions-defaults.txt
+    # Was only reachable via the separate install(FILES docs/user-guide.md
+    # ...) rule below (packaging-only) -- Help > User Guide reads it via
+    # Settings::programDataPath(), same as cables.txt/itu-regions-
+    # defaults.txt above, which needs it staged here too so a dev build
+    # (never installed) finds it as well, not just a packaged one.
+    docs/user-guide.md
 )
 
 if(APPLE)

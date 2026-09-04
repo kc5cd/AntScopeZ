@@ -11,6 +11,7 @@
 #include "style.h"
 #include "filedialog.h"
 #include <QWindow>
+#include <cmath>
 
 extern QString appendSpaces(const QString& number);
 extern bool g_developerMode; // see main.cpp
@@ -55,6 +56,22 @@ void MainWindow::onCreateMarker(const QPoint& pos)
         return;
     }
     double x = plot->xAxis->pixelToCoord(pos.x());
+    if (!std::isfinite(x)) {
+        // pixelToCoord() divides by the axis's own (upper-lower) range --
+        // NaN if that's still degenerate (lower == upper), which happens
+        // right after selecting/reconnecting an analyzer, before its first
+        // successful scan has actually plotted anything with a real range.
+        // A marker placed at that NaN frequency doesn't crash here -- it
+        // crashes the *next* mouse click anywhere on this chart instead:
+        // QCustomPlot::mousePressEvent()'s hit-testing walks every item,
+        // and QPointF::toPoint() on a NaN position hits a Qt-internal
+        // Q_ASSERT(), aborting the whole app. Confirmed via a coredump
+        // 2026-09-01 (SIGABRT in QtPrivate::qSaturateRound(), reached from
+        // QCPItemText::selectTest()), reproduced by rapidly reconnecting/
+        // re-scanning while switching analyzers. Bail out before ever
+        // creating the marker instead of letting this happen.
+        return;
+    }
     m_addingMarker = true;
     m_markers->create(x);
     m_markers->setFq(x);

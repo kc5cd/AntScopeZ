@@ -208,6 +208,25 @@ void MainWindow::on_actionAbout_triggered()
     dlg.exec();
 }
 
+void MainWindow::on_actionUserGuide_triggered()
+{
+    // Same create-once/reuse/re-null-on-destroy pattern as m_settingsDialog
+    // above -- non-modal (show(), not exec()), so re-triggering this while
+    // it's already open should just bring the existing window forward
+    // instead of stacking a second one.
+    if (m_userGuideDialog == nullptr) {
+        m_userGuideDialog = new UserGuideDialog(this);
+        connect(m_userGuideDialog, &QObject::destroyed, this, [this, dlg = m_userGuideDialog](){
+            if (m_userGuideDialog == dlg)
+                m_userGuideDialog = nullptr;
+        });
+        m_userGuideDialog->setAttribute(Qt::WA_DeleteOnClose);
+    }
+    m_userGuideDialog->show();
+    m_userGuideDialog->raise();
+    m_userGuideDialog->activateWindow();
+}
+
 void MainWindow::on_changeMeasureSystemMetric (bool state)
 {
     m_measureSystemMetric = state;

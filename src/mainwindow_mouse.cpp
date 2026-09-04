@@ -11,6 +11,7 @@
 #include "style.h"
 #include "filedialog.h"
 #include <QWindow>
+#include <cmath>
 
 extern QString appendSpaces(const QString& number);
 extern bool g_developerMode; // see main.cpp
@@ -757,6 +758,23 @@ void MainWindow::mouseMove_smith(QMouseEvent * e)
 {
     double x = m_smithWidget->xAxis->pixelToCoord(e->pos().x());
     double y = m_smithWidget->yAxis->pixelToCoord(e->pos().y());
+    // Every other mouseMove_*() in this file guards its pixelToCoord()
+    // result with a range comparison before use -- incidentally NaN-safe
+    // too (any comparison against NaN is false), since a degenerate axis
+    // range (lower == upper, e.g. right after connecting/reconnecting
+    // before a scan has plotted anything) makes pixelToCoord() return NaN.
+    // This one had no such guard at all. Not the confirmed crash site (see
+    // onCreateMarker()'s and measurements_onefq.cpp's own comments for
+    // those) -- Measurements::on_newCursorSmithPos() happens to only ever
+    // use x/y in the same kind of fail-safe comparison, falling back to a
+    // real data index rather than ever using them as a coordinate directly
+    // -- but that's an incidental property of its current implementation,
+    // not a guarantee, and every sibling handler is explicit about this
+    // instead of relying on it. Hardening to match, both for consistency
+    // and so this doesn't silently become exploitable if that function
+    // ever changes.
+    if (!std::isfinite(x) || !std::isfinite(y))
+        return;
     QList <QTableWidgetItem *> list = ui->tableWidget_measurments->selectedItems();
     if(!list.isEmpty())
     {

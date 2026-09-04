@@ -92,10 +92,21 @@ bool ComAnalyzer::openComPort(const QString& portName, quint32 portSpeed)
 
     bool result = m_comPort->open(QSerialPort::ReadWrite);
     if (!result) {
-        QString str = m_comPort->errorString();
-        //qDebug() << "ComAnalyzer::openComPort: " << portName << " " << str << " [" << m_comPort->error() << "]";
-        // TODO show dialog
-        // ...
+        // PermissionError is Qt's own cross-platform "something else already
+        // has this port open" signal (a Windows sharing violation, a Linux/
+        // Mac lock/O_EXCL conflict -- QSerialPort abstracts the OS-specific
+        // mechanism away), as opposed to e.g. DeviceNotFoundError, which
+        // just means no such port -- only the former is worth telling the
+        // user about specifically.
+        if (m_comPort->error() == QSerialPort::PermissionError) {
+            // errorString() is the OS's own message for this (e.g. "Permission
+            // error" / "Access is denied" / "Resource busy") -- genuine
+            // diagnostic data sitting right here, previously just discarded.
+            emit signalAnalyzerError(tr("Analyzer port %1 found but could not be opened -- "
+                                         "it may be in use by another program (or another "
+                                         "AntScopeZ window). (%2)")
+                                          .arg(portName, m_comPort->errorString()));
+        }
     }
     else {
         // << "ComAnalyzer::openComPort: " << portName << (m_comPort ? " opened" : "NOT opened");
@@ -249,8 +260,14 @@ qint32 ComAnalyzer::parse (QByteArray arr)
             }
             if(str == "ERROR")
             {
-                if (m_parseState == WAIT_DATA)
+                if (m_parseState == WAIT_DATA) {
+                    // No richer diagnostic than this available -- the
+                    // device just sends back the bare literal string
+                    // "ERROR", nothing else identifying what went wrong.
+                    emit signalAnalyzerError(tr("Analyzer returned ERROR while waiting "
+                                                 "for measurement data."));
                     emit signalMeasurementError();
+                }
                 continue;
             }
             if(m_parseState == WAIT_DATA || m_parseState == WAIT_USER_DATA)

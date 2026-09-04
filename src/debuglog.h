@@ -42,6 +42,21 @@ public:
     // TX and RX are always logged in full.
     static void setBleShowPings(bool show);
 
+    // "Report Detailed Errors" (Settings > Developer > Error Reporting &
+    // Logging), same session-only/off-by-default convention as the Debug
+    // Logging checkboxes above -- gates whether BleAnalyzer::setError()'s
+    // (ble_analyzer.cpp) fairly technical, frequent BLE-stack-level errors
+    // reach the user-facing analyzer error dialog (MainWindow::
+    // onAnalyzerError()) at all. Off by default: those messages used to be
+    // compiled out entirely outside a #ifdef _DEBUG build; this replaces
+    // that compile-time gate with a runtime one now that they have a real
+    // dialog to appear in, without making them appear for every user by
+    // default. Doesn't affect the small set of always-shown messages
+    // (analyzer busy/unreachable) -- see onAnalyzerError()'s own comment
+    // for why those aren't considered "detailed".
+    static void setDetailedErrorsEnabled(bool enabled);
+    static bool detailedErrorsEnabled();
+
     // Raw bytes only -- no protocol interpretation. Each call is a no-op
     // (cheap early-return) unless the matching interface's logging is
     // enabled, so call sites don't need their own enabled-check. bleTx()/
