@@ -51,8 +51,6 @@ public:
     ~MarkersPanel();
 
 public slots:
-    QList <QStringList> getPopupList(); // print support -- unused stub, see markerspanel.cpp
-
     void clearTable(void);
     void on_remove();
     QList<int> getColumns();

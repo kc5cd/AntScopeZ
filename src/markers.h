@@ -74,7 +74,6 @@ public:
     void add();
     bool getMarkersHintEnabled(void);
     void saveBmp(QString path);
-    QList <QStringList> getMarkersHintList();
     qint32 getMarkersCount();
     marker getMarker( quint32 number);
     void repaint();

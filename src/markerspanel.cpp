@@ -64,28 +64,6 @@ void MarkersPanel::on_remove()
     emit removeMarker(markerIndex);
 }
 
-QList <QStringList> MarkersPanel::getPopupList()
-{ // print support
-
-    QList <QStringList> retList;
-    QStringList tempList;
-
-    // TODO
-//    for(int i = 0; i < m_measurementsList.length(); ++i)
-//    {
-//        tempList.append(m_markersList.at(i));
-//        tempList.append(m_measurementsList.at(i));
-//        tempList.append(m_fqList.at(i));
-//        tempList.append(m_swrList.at(i));
-//        tempList.append(m_rlList.at(i));
-//        tempList.append(m_zList.at(i));
-//        tempList.append(m_phaseList.at(i));
-//        retList.append(tempList);
-//        tempList.clear();
-//    }
-    return retList;
-}
-
 void MarkersPanel::on_translate()
 {
     // headerMap() lazily builds and caches its QMap forever, so switching

@@ -702,15 +702,6 @@ void Markers::saveBmp(QString path)
     }
 }
 
-QList <QStringList> Markers::getMarkersHintList()
-{
-    if(m_markersHint != NULL)
-    {
-        return m_markersHint->getPopupList();
-    }
-    return QList <QStringList> ();
-}
-
 qint32 Markers::getMarkersCount()
 {
     return m_markersList.length();
