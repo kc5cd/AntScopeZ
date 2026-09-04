@@ -63,6 +63,7 @@ void MainWindow::on_tableWidget_presets_cellActivated(int row, int column)
     m_rsWidget->xAxis->setRange(range);
     m_rpWidget->xAxis->setRange(range);
     m_rlWidget->xAxis->setRange(range);
+    m_s21Widget->xAxis->setRange(range);
 #if USER_DEFINED_FEATURE
     m_userWidget->xAxis->setRange(range);
 #endif
@@ -245,6 +246,7 @@ void MainWindow::on_presetsBandComboBox_currentIndexChanged(int index)
         m_rsWidget->xAxis->setRange(plotRange);
         m_rpWidget->xAxis->setRange(plotRange);
         m_rlWidget->xAxis->setRange(plotRange);
+        m_s21Widget->xAxis->setRange(plotRange);
 #if USER_DEFINED_FEATURE
         m_userWidget->xAxis->setRange(plotRange);
 #endif
