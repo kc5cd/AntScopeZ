@@ -120,6 +120,12 @@ public:
         m_measurements->interrupt();
         emit stopMeasure();
     }
+    // Starts/stops m_remoteApiServer live -- called from Settings' accept
+    // handler (settings.cpp) so toggling the "Enable Remote API" checkbox
+    // takes effect immediately, no restart needed. Also called once at
+    // startup (mainwindow.cpp constructor) if the persisted setting was
+    // already on.
+    void setRemoteApiEnabled(bool enabled, quint16 port);
     Markers* markers() { return m_markers; }
     QTabWidget* tabWidget();
 \

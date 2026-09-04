@@ -66,6 +66,14 @@ int g_analyzerMaxPoints = 1000;
 // developer/debug feature. Default off, matching pre-existing behavior for
 // anyone who never had -developer passed.
 bool g_extendedChartZoom = false;
+// "Enable Remote API" (Settings > General) -- starts a local NDJSON-over-TCP
+// control API (remoteapi/, json-tcp-api branch), loopback-only by default.
+// Default off: opening a network port, even loopback-only, shouldn't happen
+// without the user opting in. g_remoteApiPort's default (7443) is otherwise
+// arbitrary -- chosen to avoid common local-dev port collisions (3000/5000/
+// 8000/8080 etc.), not tied to any registered/well-known port.
+bool g_remoteApiEnabled = false;
+int g_remoteApiPort = 7443;
 // "Analyzer timeout" (Settings > General) -- seconds a scan can go without
 // receiving a single data point before AnalyzerPro's watchdog treats it as
 // failed (device gone, or busy -- already held open by another program or
@@ -291,6 +299,8 @@ MainWindow::MainWindow(QWidget *parent) :
     g_pointsWarnThreshold = m_settings->value("pointsWarnThreshold", 1000).toInt();
     g_analyzerMaxPoints = m_settings->value("analyzerMaxPoints", 1000).toInt();
     g_extendedChartZoom = m_settings->value("extendedChartZoom", false).toBool();
+    g_remoteApiEnabled = m_settings->value("remoteApiEnabled", false).toBool();
+    g_remoteApiPort = m_settings->value("remoteApiPort", 7443).toInt();
     g_analyzerTimeoutSec = m_settings->value("analyzerTimeoutSec", 8).toInt();
     m_activeThemeIndex = m_settings->value("activeTheme", 0).toInt();
     m_settings->endGroup();
@@ -389,13 +399,13 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(m_analyzer, &AnalyzerPro::signalMeasurementError, this, &MainWindow::onMeasurementError);
     connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, &MainWindow::onAnalyzerError);
 
-    // json-tcp-api phase 1: always started on a fixed port for
-    // development verification. Phase 4 makes this conditional on a
-    // persisted Settings toggle (+ configurable port) instead -- see the
-    // json-tcp-api plan doc. Loopback-only bind is RemoteApiServer::start()'s
-    // own default, not repeated here.
+    // g_remoteApiEnabled/g_remoteApiPort were already read from QSettings
+    // above (the earlier "Settings" group block) by the time this runs.
+    // Loopback-only bind is RemoteApiServer::start()'s own default, not
+    // repeated here.
     m_remoteApiServer = new RemoteApiServer(this, this);
-    m_remoteApiServer->start(7443);
+    if (g_remoteApiEnabled)
+        m_remoteApiServer->start(static_cast<quint16>(g_remoteApiPort));
     // These QShortcuts are parented to `this` (MainWindow), so Qt's parent-child
     // ownership deletes them automatically when MainWindow is destroyed -- clang's
     // static analyzer doesn't model that ownership, hence the false "leak" warnings.
@@ -982,6 +992,14 @@ MainWindow::MainWindow(QWidget *parent) :
     }
 }
 
+void MainWindow::setRemoteApiEnabled(bool enabled, quint16 port)
+{
+    if (enabled)
+        m_remoteApiServer->start(port);
+    else
+        m_remoteApiServer->stop();
+}
+
 MainWindow::~MainWindow()
 {
     // Explicit stop() before anything else: closes the listening socket
@@ -1063,6 +1081,8 @@ MainWindow::~MainWindow()
     m_settings->setValue("pointsWarnThreshold", g_pointsWarnThreshold);
     m_settings->setValue("analyzerMaxPoints", g_analyzerMaxPoints);
     m_settings->setValue("extendedChartZoom", g_extendedChartZoom);
+    m_settings->setValue("remoteApiEnabled", g_remoteApiEnabled);
+    m_settings->setValue("remoteApiPort", g_remoteApiPort);
     m_settings->setValue("analyzerTimeoutSec", g_analyzerTimeoutSec);
     m_settings->endGroup();
 
