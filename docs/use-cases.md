@@ -40,11 +40,11 @@ possible today.
 | 39 | See every significant reflection in a scan, not just the single strongest one (e.g. two connectors plus the far end) | -- | -- | ❌ feature suggestion, 2026-08-21, not scoped -- needs real peak-finding (local maxima above the noise floor), not just a global max. See [[tdr-scan-rework-plan]]. |
 | 40 | Compare a TDR scan against an earlier one of the same cable (did a repair actually change anything) | Select multiple Measurements rows, eyeball both traces on the same chart | TDR (multi-select already works) | ⚠️ possible today by overlaying rows manually; no dedicated before/after diff (distance/amplitude deltas called out explicitly). Feature suggestion, 2026-08-21, not scoped -- would need a second-measurement picker UI. See [[tdr-scan-rework-plan]]. |
 | 18 | Type "6ft"/"1.5M" into a field instead of the field's fixed unit | -- | -- | ❌ planned, not started (see the unit-shorthand-input plan) |
-| 29 | Scan a range wider than one sweep/device supports (segmented/stitched sweep) | Settings > General: set "Analyzer maximum number of points" to the device's real limit; requesting more points than that transparently splits the scan into several sequential sweeps and concatenates them into one continuous dataset | any 1-port chart | ✅ (shipped -- `g_analyzerMaxPoints`, `AnalyzerPro::buildStitchSegments()`; confirmed 2026-08-18 against a real RigExpert Match at 1000/2000/10000 points) |
+| 29 | Scan a range wider than one sweep/device supports (segmented/stitched sweep) | Settings > General: set "Analyzer maximum number of points" to the device's real limit; requesting more points than that transparently splits the scan into several sequential sweeps and concatenates them into one continuous dataset | any 1-port chart | ✅ (shipped -- `g_analyzerMaxPoints`, `AnalyzerPro::buildStitchSegments()`; confirmed 2026-08-18 against a real RigExpert Match at 1000/2000/10000 points). Real bug found+fixed 2026-09-03 against NanoVNA-family devices specifically: each segment's completion signal was treated as *the* completion, so only the first segment's data ever showed -- see `AnalyzerPro::isStitchedSweepComplete()`. |
 | 36 | Watch SWR/Z settle at one specific frequency live, without a full sweep redrawing around it | Set Start=Stop (or Range=0), Single or Continuous | Smith chart tracer + a floating readout box | ✅ (undocumented until 2026-08-20 despite being reachable all along; three real bugs -- a crash, a silent restart loop, disabled panel buttons -- found and fixed the same day) |
 | 37 | Get a large, glanceable SWR readout visible from a distance (e.g. up a ladder, tweaking an antenna, reading the screen across a yard) | Double-click the One Fq floating box (or its alternate) to swap to a plain, resizable dialog showing just SWR as one giant bold number ("x.xx:1") with a small "SWR" caption, auto-sized to fill on resize | One Fq mode | ✅ (shipped in 2.2.2, released 2026-08-28 -- `OneFqDisplayStyle::BigReadout` finally rendered. Both styles stay live-updated regardless of which is shown; the choice is remembered across restarts and tracks the main window's minimize/restore state.) |
 
-## 2-port / transmission measurement (`.s2p` import, plus live NanoVNA S11+S21 as of 2026-08-31 -- not yet validated against real hardware)
+## 2-port / transmission measurement (`.s2p` import, plus live NanoVNA-family S11+S21 -- classic ASCII since 2026-08-31, validated against real NanoVNA-H4 hardware 2026-09-02; V2/binary since 2026-09-03, emulator-only so far)
 
 | # | Use case | How today | Charts/tools | Status |
 |---|---|---|---|---|
@@ -57,7 +57,7 @@ possible today.
 | 25 | Read group delay / phase linearity through a device | -- | -- | ❌ explicitly deferred in the 2-port plan |
 | 26 | Compare S21 alongside another chart in Multi view | -- | -- | ❌ S21 is explicitly excluded from Multi's join menu (`mainwindow_multitab.cpp`) |
 | 27 | Export imported 2-port data back out (S11/S21/S12/S22), in RI, MA, or DB | Export dialog's S2P RI/MA/DB buttons (only shown for a 2-port measurement) | File > Export | ✅ (shipped 2026-08-19, `exportSParamData()`) |
-| 28 | Capture 2-port data live from real hardware | NanoVNA-family: `data 1` after the normal S11 pass, plus an opportunistic ASCII/binary `scan` fast path where firmware supports it | any 1-port chart + S21 tab (NanoVNA only) | ⚠️ split by device family. **NanoVNA-family: ✅** shipped 2026-08-31 -- real S11+S21 requested on every sweep, but forward-only: S12/S22 are hardcoded to `(0,0)` in `nanovna_analyzer.cpp`, not a full 4-parameter capture, and still not validated against real hardware (code went in ahead of the co-dev's NanoVNA-H4 arriving -- see [[nanovna-two-port-work-deferred]]). **RigExpert-family: ❌** still a dead end on this user's hardware -- `FDB` (S21) *and* `EFRX` (User Defined tab) both return "Error.Not recognized" on the only device tested (RigExpert Match RFE, confirmed 2026-08-19/20). See [[s21-and-user-defined-live-capture-deferred]]. (Row 29's stitching still doesn't reach either path -- `on_measureUser()`/EFRX already routes through `startStitchedMeasure()`, `on_measureS21()`/FDB doesn't, and NanoVNA's own scan pipeline is separate again.) |
+| 28 | Capture 2-port data live from real hardware | NanoVNA-family (classic ASCII *and* V2/binary): `data 1` after the normal S11 pass (classic), or S11+S21 together per FIFO record (V2), plus an opportunistic ASCII/binary `scan` fast path where classic firmware supports it | any 1-port chart + S21 tab (NanoVNA only) | ⚠️ split by device family. **NanoVNA-family: ✅** classic ASCII shipped 2026-08-31, since exercised against real NanoVNA-H4 hardware (two real bugs found and fixed 2026-09-02 -- see [[nanovna-two-port-work-deferred]]); V2/binary (`nanovna_v2_analyzer.cpp`) shipped 2026-09-03, so far only tested against the companion NanoVNA emulator, not real V2/LiteVNA64 hardware. Both forward-only: S12/S22 are hardcoded to `(0,0)`, not a full 4-parameter capture. **RigExpert-family: ❌** still a dead end on this user's hardware -- `FDB` (S21) *and* `EFRX` (User Defined tab) both return "Error.Not recognized" on the only device tested (RigExpert Match RFE, confirmed 2026-08-19/20). See [[s21-and-user-defined-live-capture-deferred]]. (Row 29's stitching still doesn't reach either path -- `on_measureUser()`/EFRX already routes through `startStitchedMeasure()`, `on_measureS21()`/FDB doesn't, and NanoVNA's own scan pipeline is separate again.) |
 | 35 | Import a 2-port *Z-parameter* Touchstone file (`# ... Z RI ...`, 9-value rows) correctly | -- | -- | ❌ real gap found 2026-08-19 -- Z21/Z12/Z22 are a different quantity than S21/S12/S22 (would need actual Z-to-S 2-port matrix conversion); guarded against silent mislabeling (skipped, not shown as wrong data) rather than fixed. S-parameter 2-port files (the overwhelmingly common case) are unaffected. |
 | 34 | Tell, at a glance, which Measurements-list rows are 2-port (have real S21/S12/S22) vs. plain 1-port | Points column now reads e.g. "100 (s1p)"/"300 (s2p)" | Measurements panel | ✅ (shipped 2026-08-19; column-width formatting for large point counts still to be revisited) |
 
@@ -65,7 +65,7 @@ possible today.
 
 | # | Use case | How today | Charts/tools | Status |
 |---|---|---|---|---|
-| 30 | Understand why a scan is slow or appears hung | A scan that goes silent past Settings > General > "Analyzer timeout" (default 8s) now fails with a proper non-modal error dialog -- timestamped, with whatever diagnostic detail is available -- instead of leaving the busy indicator/wait cursor stuck forever | Settings > General, analyzer error dialog | ✅ (shipped 2026-09-01 -- `AnalyzerPro` scan-silence watchdog; USB/HID and Serial connections also now detect "device present but busy" specifically, both at launch and while polling) |
+| 30 | Understand why a scan is slow or appears hung | A scan that goes silent past Settings > General > "Analyzer timeout" (default 8s) now fails with a proper non-modal error dialog -- timestamped, with whatever diagnostic detail is available -- instead of leaving the busy indicator/wait cursor stuck forever. Stopping a scan that's still delivering data (neither NanoVNA protocol has a wire-level abort) now visibly shows "draining" progress in the status bar and disables scan controls until it's genuinely done, instead of looking stopped while still silently discarding incoming points -- bounded by the same watchdog | Settings > General, analyzer error dialog, status bar | ✅ (watchdog shipped 2026-09-01 -- `AnalyzerPro` scan-silence watchdog; USB/HID and Serial connections also now detect "device present but busy" specifically, both at launch and while polling. Drain-aware stop shipped 2026-09-03/04 -- `AnalyzerPro::beginDraining()`/`stopCommandAbortsDevice()`, optional "Use reconnect to drain unwanted data" in Settings > General) |
 | 31 | Reliable auto-reconnect after a dropped/power-cycled analyzer | -- | -- | ⚠️ known gap, unchanged -- row 30's "device present but busy" detection helps diagnose a stuck connect attempt but doesn't make the reconnect itself more reliable |
 | 38 | Get remote help from a more experienced ham -- let them drive your analyzer software over the network while you handle the physical antenna/hardware end | -- | -- | ❌ parked idea (2026-08-20), not scoped or designed -- see [[remote-network-control-idea]]. Would supersede, not extend, an existing but abandoned narrow UDP bridge (see [[s21-and-user-defined-live-capture-deferred]]-adjacent findings in `BUILDINFO.md`). |
 
@@ -111,3 +111,38 @@ Rows above get their "shipped"/"fixed" status kept in sync with
   double-free on close, Continuous mode's Points column updating on
   stop, empty scans no longer left in the Measurements list -- and an
   in-app Help > User Guide viewer.
+- **2026-09-02, NanoVNA-H4 hardware arrives:** the classic ASCII NanoVNA
+  path exercised against real hardware for the first time; two real bugs
+  found and fixed (0 Hz reported for the first swept point; a race on the
+  first Single-click right after connecting, root-caused live via gdb).
+  See [[nanovna-two-port-work-deferred]].
+- **2026-09-03, NanoVNA V2/LiteVNA64 + assorted NanoVNA-family fixes:**
+  binary register+FIFO protocol support (`nanovna_v2_analyzer.cpp`, row
+  28's V2 half), built and verified against a companion NanoVNA emulator
+  (ASCII and binary, plus fault injection) rather than real V2 hardware --
+  Connect Analyzer gained a dev-only "(dev emulator)" row for this, shown
+  only while the emulator's actually running. Testing against it surfaced
+  several real, pre-existing bugs: a stitched-sweep race that only ever
+  showed the first segment's data on any NanoVNA-family device (row 29);
+  a TDR scan against a NanoVNA-family device that could get permanently
+  stuck (Stop unresponsive); TDR's Result groupbox not refreshing after a
+  normally-completed NanoVNA scan; a port-reuse race reconnecting to a
+  different analyzer type at the same port path.
+- **2026-09-03/04, drain-aware scan stop:** stopping a scan mid-flight
+  now visibly drains instead of looking hung (row 30's second half).
+  Several real bugs found testing it against the emulator: draining
+  always timing out on devices that actually do have a wire-level abort
+  (HID/Serial, e.g. Match); a status-bar ordering bug that always
+  computed "how many points remain" as the full original count instead
+  of what was genuinely still in flight; Settings dialog force-resetting
+  every Developer-tab checkbox (and, for one of them, the real
+  underlying flag too) on every single reopen, not just once per launch.
+- **2026-09-04, Settings reorg + a real 2-marker bug:** "Report Detailed
+  Errors" and "Use reconnect to drain unwanted data" moved from
+  Developer to General tab, now persisted to the ini instead of
+  session-only; BLE Pings' own default fixed (was `true`, contradicting
+  its own "defaults unchecked" comment). Also found: a V2/binary scan
+  placed two "lowest SWR" auto-markers per scan instead of one --
+  `MainWindow::on_measurementComplete()`'s NanoVNA-family early-return
+  only ever checked the classic `NANO` enum value, never the newer
+  `NANOV2`.

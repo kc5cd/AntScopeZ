@@ -13,6 +13,24 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ### Fixed
 
+- A V2/binary NanoVNA scan placed two "lowest SWR" auto-markers per scan
+  instead of one: `MainWindow::on_measurementComplete()`'s NanoVNA-family
+  early-return only ever checked the classic `ReDeviceInfo::NANO` enum
+  value, not `NANOV2` (added later, as its own value), so a V2 scan fell
+  through to that function's own marker placement *and* the separate
+  `on_measurementCompleteNano()` handler's. Classic ASCII never showed
+  this -- it actually matched the check.
+- Settings dialog reset every Developer-tab checkbox (Debug Logging,
+  Report Detailed Errors, reconnect-to-drain) to unchecked on every
+  single reopen, not just once per launch, since the dialog itself is
+  reconstructed fresh each time it's opened -- discarding whatever you'd
+  just set the moment you closed and reopened it. One of them (Report
+  Detailed Errors) additionally force-reset the real underlying flag,
+  not just the checkbox -- a functional regression, not just cosmetic.
+  Now reads current state instead of hardcoding it off.
+- BLE Pings' actual default was `true`, contradicting its own "defaults
+  unchecked (hidden)" comment -- it now genuinely starts unchecked.
+
 - Draining always timed out on HID/Serial devices (e.g. Match): the
   default `BaseAnalyzer::stopMeasure()` actually sends a real `"off\r"`
   wire-level abort, so the device genuinely stops producing more data --
@@ -42,6 +60,14 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
   checking closely. Now highlights whichever row matches the currently
   selected connection.
 
+### Changed
+
+- "Report Detailed Errors" and "Use reconnect to drain unwanted data"
+  moved from Settings > Developer to Settings > General (under Analyzer
+  timeout) -- ordinary user-facing preferences, not debug-only ones. Both
+  now persist to the ini like the rest of the General tab, instead of
+  being session-only.
+
 ### Added
 
 - Status bar's scan-progress label now updates when a scan *starts* too
@@ -66,7 +92,7 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
   a dialog mid-scan, ...), since they already all funnel through one place
   (`AnalyzerPro::on_stopMeasure()`). Neither the classic ASCII nor the
   V2/LiteVNA64 binary protocol has a wire-level "abort" command, so this is
-  fundamentally a wait -- Settings > Developer's new "Use reconnect to
+  fundamentally a wait -- Settings > General's new "Use reconnect to
   drain unwanted data" checkbox (off by default) switches to closing and
   reopening the connection instead, often faster for a large scan, though
   not guaranteed to make every device discard what it already queued.
