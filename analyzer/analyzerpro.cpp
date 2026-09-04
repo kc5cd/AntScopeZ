@@ -648,6 +648,13 @@ void AnalyzerPro::on_stopMeasure()
         }
     } else {
         stopWatchdog();
+        // No draining needed (device already genuinely stopped, or nothing
+        // was measuring in the first place) -- without this, the status
+        // bar just sat on whatever "Scanning (N/Total points)..." text was
+        // last shown, forever, since nothing else here ever resets it.
+        // Confirmed live 2026-09-04.
+        if (wasMeasuring)
+            emit statusMessageChanged(tr("Ready"));
     }
 }
 

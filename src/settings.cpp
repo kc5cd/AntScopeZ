@@ -134,14 +134,23 @@ Settings::Settings(QWidget *parent) :
     m_settings->endGroup();
 
     // Debug Logging (Developer tab) -- deliberately NOT persisted to the
-    // ini and always starts unchecked: logging is opt-in per session, not
-    // a standing setting someone forgets they left on. Drives DebugLog's
-    // per-interface enable flags directly (also plain in-memory, not
-    // persisted) rather than through QSettings.
-    ui->debugLogSerialCheckBox->setChecked(false);
-    ui->debugLogUsbHidCheckBox->setChecked(false);
-    ui->debugLogBleCheckBox->setChecked(false);
-    ui->debugLogNanovnaCheckBox->setChecked(false);
+    // ini, so it always starts off on a *fresh app launch* (DebugLog's
+    // static flags default false at process start) -- logging is opt-in
+    // per run, not a standing setting someone forgets they left on. But
+    // this dialog itself is reconstructed fresh every time Settings is
+    // opened (not a singleton reused across opens), so hardcoding
+    // setChecked(false) here -- as this used to -- reset the *visible*
+    // checkbox on every single reopen too, not just once per launch,
+    // regardless of whether logging was actually still running underneath.
+    // Reading DebugLog's own current state instead fixes that without
+    // giving up the "off by default each launch" behavior (the getters
+    // just return whatever's actually true right now). Confirmed live
+    // 2026-09-04: checked "NanoVNA", closed Settings, reopened it, box was
+    // back to unchecked.
+    ui->debugLogSerialCheckBox->setChecked(DebugLog::serialEnabled());
+    ui->debugLogUsbHidCheckBox->setChecked(DebugLog::usbHidEnabled());
+    ui->debugLogBleCheckBox->setChecked(DebugLog::bleEnabled());
+    ui->debugLogNanovnaCheckBox->setChecked(DebugLog::nanovnaEnabled());
     connect(ui->debugLogSerialCheckBox, &QCheckBox::clicked, DebugLog::setSerialEnabled);
     connect(ui->debugLogUsbHidCheckBox, &QCheckBox::clicked, DebugLog::setUsbHidEnabled);
     connect(ui->debugLogBleCheckBox, &QCheckBox::clicked, DebugLog::setBleEnabled);
@@ -149,29 +158,28 @@ Settings::Settings(QWidget *parent) :
 
     // BLE's once-a-second keepalive ping is real traffic but drowns out
     // everything else in a long capture -- see DebugLog::setBleShowPings().
-    // Only meaningful (and only enabled) while BLE logging itself is on;
-    // defaults unchecked (hidden) since it's just noise in the common case
-    // of chasing a real BLE bug, same opt-in-per-session spirit as the rest
-    // of this group.
-    ui->debugLogBleShowPingsCheckBox->setChecked(false);
+    // Only meaningful while BLE logging itself is on -- same
+    // read-current-state fix as the four checkboxes above, not a
+    // hardcoded reset.
+    ui->debugLogBleShowPingsCheckBox->setChecked(DebugLog::bleShowPings());
     ui->debugLogBleShowPingsCheckBox->setEnabled(ui->debugLogBleCheckBox->isChecked());
-    DebugLog::setBleShowPings(false);
     connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, ui->debugLogBleShowPingsCheckBox, &QCheckBox::setEnabled);
     connect(ui->debugLogBleShowPingsCheckBox, &QCheckBox::clicked, DebugLog::setBleShowPings);
 
-    // Error Reporting & Logging -- same session-only/off-by-default
-    // convention as Debug Logging just above (see DebugLog::
-    // setDetailedErrorsEnabled()'s comment).
-    ui->checkBoxReportDetailedErrors->setChecked(false);
-    DebugLog::setDetailedErrorsEnabled(false);
+    // Error Reporting & Logging -- same read-current-state fix as Debug
+    // Logging above. This one used to also force-reset the *actual*
+    // setting (DebugLog::setDetailedErrorsEnabled(false)), not just the
+    // checkbox -- a real functional regression on every Settings reopen,
+    // not just a cosmetic one.
+    ui->checkBoxReportDetailedErrors->setChecked(DebugLog::detailedErrorsEnabled());
     connect(ui->checkBoxReportDetailedErrors, &QCheckBox::clicked, DebugLog::setDetailedErrorsEnabled);
 
-    // Stopping a Scan -- same session-only/off-by-default convention as the
-    // two groups above. See AnalyzerPro::beginReconnectDrain()'s comment
-    // for what this actually changes.
-    ui->checkBoxReconnectToDrain->setChecked(false);
+    // Stopping a Scan -- same read-current-state fix (see above) applied
+    // to g_reconnectToDrain, which had the identical bug from the day it
+    // was added. See AnalyzerPro::beginReconnectDrain()'s comment for what
+    // this actually changes.
     extern bool g_reconnectToDrain; // main.cpp
-    g_reconnectToDrain = false;
+    ui->checkBoxReconnectToDrain->setChecked(g_reconnectToDrain);
     connect(ui->checkBoxReconnectToDrain, &QCheckBox::clicked, [](bool checked) {
         extern bool g_reconnectToDrain;
         g_reconnectToDrain = checked;

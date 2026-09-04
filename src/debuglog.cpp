@@ -97,10 +97,15 @@ void writeEntry(const QString &tag, const QString &direction, const QByteArray &
 } // namespace
 
 void DebugLog::setSerialEnabled(bool enabled) { g_serialEnabled = enabled; }
+bool DebugLog::serialEnabled() { return g_serialEnabled; }
 void DebugLog::setUsbHidEnabled(bool enabled) { g_usbHidEnabled = enabled; }
+bool DebugLog::usbHidEnabled() { return g_usbHidEnabled; }
 void DebugLog::setBleEnabled(bool enabled) { g_bleEnabled = enabled; }
+bool DebugLog::bleEnabled() { return g_bleEnabled; }
 void DebugLog::setNanovnaEnabled(bool enabled) { g_nanovnaEnabled = enabled; }
+bool DebugLog::nanovnaEnabled() { return g_nanovnaEnabled; }
 void DebugLog::setBleShowPings(bool show) { g_bleShowPings = show; }
+bool DebugLog::bleShowPings() { return g_bleShowPings; }
 
 void DebugLog::setDetailedErrorsEnabled(bool enabled) { g_detailedErrorsEnabled = enabled; }
 bool DebugLog::detailedErrorsEnabled() { return g_detailedErrorsEnabled; }

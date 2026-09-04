@@ -26,9 +26,13 @@ class DebugLog
 {
 public:
     static void setSerialEnabled(bool enabled);
+    static bool serialEnabled();
     static void setUsbHidEnabled(bool enabled);
+    static bool usbHidEnabled();
     static void setBleEnabled(bool enabled);
+    static bool bleEnabled();
     static void setNanovnaEnabled(bool enabled);
+    static bool nanovnaEnabled();
 
     // BLE's once-a-second keepalive ping (BleAnalyzer::sendPing(),
     // BLE_PING_CMD) is legitimate traffic but drowns out real work in a
@@ -41,6 +45,7 @@ public:
     // identification reply -- so it's deliberately NOT filtered: Serial
     // TX and RX are always logged in full.
     static void setBleShowPings(bool show);
+    static bool bleShowPings();
 
     // "Report Detailed Errors" (Settings > Developer > Error Reporting &
     // Logging), same session-only/off-by-default convention as the Debug
