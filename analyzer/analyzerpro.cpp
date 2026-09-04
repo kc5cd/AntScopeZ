@@ -891,6 +891,20 @@ void AnalyzerPro::connectSignals()
     connect(this, &AnalyzerPro::screenshotComplete, m_baseAnalyzer, &BaseAnalyzer::on_screenshotComplete);
     connect(m_baseAnalyzer, &BaseAnalyzer::signalAnalyzerError, this, &AnalyzerPro::signalAnalyzerError);
     connect(m_baseAnalyzer, &BaseAnalyzer::completeMeasurement, this, [=](){
+        // Same leftover-data-after-stop guard as on_newData()/on_newS21Data()/
+        // on_newSParamPoint() (see on_newData()'s comment for the full
+        // reasoning) -- NanovnaAnalyzer::stopMeasure() only clears
+        // m_isMeasuring, not the parser state, so a scan already in flight
+        // when Esc/Stop is pressed keeps parsing to its own natural end and
+        // still emits completeMeasurement() once the trailing "ch>" arrives.
+        // Without this guard that stale signal reaches
+        // MainWindow::on_measurementCompleteNano() same as a real
+        // completion does -- if the user has since started a *new* scan,
+        // it wrongly runs that handler's completion bookkeeping (including
+        // possibly deleting the new scan's just-created row and forcing
+        // m_analyzer->setIsMeasuring(false) mid-flight) against it instead.
+        if (!m_isMeasuring)
+            return;
         if (m_baseAnalyzer != nullptr) {
             m_baseAnalyzer->on_measurementComplete();
         }
