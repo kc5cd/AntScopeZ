@@ -134,14 +134,17 @@ Settings::Settings(QWidget *parent) :
     m_settings->endGroup();
 
     // Debug Logging (Developer tab) -- deliberately NOT persisted to the
-    // ini and always starts unchecked: logging is opt-in per session, not
-    // a standing setting someone forgets they left on. Drives DebugLog's
-    // per-interface enable flags directly (also plain in-memory, not
-    // persisted) rather than through QSettings.
-    ui->debugLogSerialCheckBox->setChecked(false);
-    ui->debugLogUsbHidCheckBox->setChecked(false);
-    ui->debugLogBleCheckBox->setChecked(false);
-    ui->debugLogNanovnaCheckBox->setChecked(false);
+    // ini: logging is opt-in per session, not a standing setting someone
+    // forgets they left on. Drives DebugLog's per-interface enable flags
+    // directly (also plain in-memory, not persisted) rather than through
+    // QSettings. Read back DebugLog's own current state rather than just
+    // assuming unchecked -- it can already be true here, e.g. the
+    // -comserial/-usbhid/-nanovna/-ble CLI flags (main.cpp) set it before
+    // Settings is ever opened.
+    ui->debugLogSerialCheckBox->setChecked(DebugLog::serialEnabled());
+    ui->debugLogUsbHidCheckBox->setChecked(DebugLog::usbHidEnabled());
+    ui->debugLogBleCheckBox->setChecked(DebugLog::bleEnabled());
+    ui->debugLogNanovnaCheckBox->setChecked(DebugLog::nanovnaEnabled());
     connect(ui->debugLogSerialCheckBox, &QCheckBox::clicked, DebugLog::setSerialEnabled);
     connect(ui->debugLogUsbHidCheckBox, &QCheckBox::clicked, DebugLog::setUsbHidEnabled);
     connect(ui->debugLogBleCheckBox, &QCheckBox::clicked, DebugLog::setBleEnabled);
