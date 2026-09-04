@@ -28,8 +28,21 @@ RemoteApiConnection::RemoteApiConnection(QTcpSocket* socket, MainWindow* mainWin
     // one (if any) issued the command that caused it -- matches the
     // "any client can watch, not just the one in control" design used for
     // the point-stream subscription too (added a later phase).
-    connect(m_mainWindow->analyzer(), &AnalyzerPro::analyzerFound, this, &RemoteApiConnection::onAnalyzerFound);
-    connect(m_mainWindow->analyzer(), &AnalyzerPro::deviceDisconnected, this, &RemoteApiConnection::onDeviceDisconnected);
+    //
+    // Qt::QueuedConnection deliberately, not the default: cmdConnect()/
+    // cmdDisconnect() call straight into AnalyzerPro methods that emit
+    // these signals synchronously before returning, and MainWindow's own
+    // (separate, pre-existing, direct) connection to the same signals is
+    // what actually updates m_analyzerConnected -- so that part is still
+    // synchronous and correct by the time this command's own reply is
+    // built. Without queuing here specifically, the broadcast event below
+    // would still write to the socket *before* dispatch() gets to send
+    // this command's own reply (confirmed empirically: the "disconnected"
+    // event arrived on the wire ahead of the disconnect command's own
+    // {"id":...} response). Queuing defers just the broadcast, so replies
+    // always precede any event they caused.
+    connect(m_mainWindow->analyzer(), &AnalyzerPro::analyzerFound, this, &RemoteApiConnection::onAnalyzerFound, Qt::QueuedConnection);
+    connect(m_mainWindow->analyzer(), &AnalyzerPro::deviceDisconnected, this, &RemoteApiConnection::onDeviceDisconnected, Qt::QueuedConnection);
 }
 
 void RemoteApiConnection::onReadyRead()
