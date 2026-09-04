@@ -10,6 +10,7 @@
 #include "style.h"
 #include "filedialog.h"
 #include "editbandsdialog.h"
+#include "remoteapi/remoteapiserver.h"
 #include <QWindow>
 #include <QActionGroup>
 
@@ -387,6 +388,14 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(this,&MainWindow::measureOneFq, m_analyzer,&AnalyzerPro::on_measureOneFq);
     connect(m_analyzer, &AnalyzerPro::signalMeasurementError, this, &MainWindow::onMeasurementError);
     connect(m_analyzer, &AnalyzerPro::signalAnalyzerError, this, &MainWindow::onAnalyzerError);
+
+    // json-tcp-api phase 1: always started on a fixed port for
+    // development verification. Phase 4 makes this conditional on a
+    // persisted Settings toggle (+ configurable port) instead -- see the
+    // json-tcp-api plan doc. Loopback-only bind is RemoteApiServer::start()'s
+    // own default, not repeated here.
+    m_remoteApiServer = new RemoteApiServer(this, this);
+    m_remoteApiServer->start(7443);
     // These QShortcuts are parented to `this` (MainWindow), so Qt's parent-child
     // ownership deletes them automatically when MainWindow is destroyed -- clang's
     // static analyzer doesn't model that ownership, hence the false "leak" warnings.
@@ -975,6 +984,14 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
+    // Explicit stop() before anything else: closes the listening socket
+    // and drops connections synchronously (their deleteLater()s still
+    // resolve on this same event loop before it stops), rather than
+    // leaving that to QObject parent-child teardown ordering, which isn't
+    // guaranteed to run before m_analyzer itself is torn down below.
+    if (m_remoteApiServer != nullptr)
+        m_remoteApiServer->stop();
+
     QList<QStringList*> values = m_BandsMap.values();
     while (!values.isEmpty()) {
         QStringList* lst = values.takeLast();

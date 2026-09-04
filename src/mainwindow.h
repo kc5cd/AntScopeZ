@@ -66,6 +66,8 @@ namespace Ui {
 class MainWindow;
 }
 
+class RemoteApiServer;
+
 struct MultiTab {
     QList<QString> tabs;
     bool isVisible() { return !tabs.isEmpty(); }
@@ -100,6 +102,8 @@ public:
     void openFile(QString path);
     AnalyzerPro* analyzer() { return m_analyzer; }
     bool isMeasuring() { return analyzer()->isMeasuring(); }
+    bool isAnalyzerConnected() const { return m_analyzerConnected; }
+    QString connectedDeviceName() const { return m_connectedDeviceName; }
     Markers* markers() { return m_markers; }
     QTabWidget* tabWidget();
 \
@@ -116,6 +120,10 @@ private:
 
     AnalyzerData *m_analyzerData = nullptr;
     AnalyzerPro *m_analyzer = nullptr;
+    // Owned via normal QObject parent-child (parent = this), same as
+    // m_analyzer -- no manual delete needed, but stop() is still called
+    // explicitly in the destructor (see there for why).
+    RemoteApiServer *m_remoteApiServer = nullptr;
     // State refreshWindowTitle() composes the title from -- see its
     // declaration above.
     bool m_analyzerConnected = false;
