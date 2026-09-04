@@ -218,8 +218,24 @@ QJsonObject RemoteApiConnection::cmdConnect(const QJsonObject& request, QString*
         return QJsonObject();
     }
 
+    QString typeStr = request.value("type").toString();
+    if (typeStr == QLatin1String("ble")) {
+        // Explicitly rejected, not just unsupported by omission:
+        // connectSilent()'s BLE branch (src/selectdevicedialog.cpp)
+        // constructs a parentless BleAnalyzer via scanSilent() that
+        // SelectDeviceDialog::reset()/~SelectDeviceDialog() would
+        // otherwise be relied on to clean up -- but
+        // AnalyzerPro::createDevice() takes ownership of a non-null
+        // passed-in analyzer without reparenting it, and this command's
+        // SelectDeviceDialog below is a short-lived stack local, not
+        // something that stays alive to own it. Left for a future phase
+        // alongside real BLE support in devices() (see its own comment).
+        *error = QStringLiteral("BLE connect is not supported by this API yet");
+        return QJsonObject();
+    }
+
     QString name = request.value("name").toString();
-    ReDeviceInfo::InterfaceType type = deviceTypeFromString(request.value("type").toString());
+    ReDeviceInfo::InterfaceType type = deviceTypeFromString(typeStr);
     if (type == ReDeviceInfo::WRONG || name.isEmpty()) {
         *error = QStringLiteral("invalid or unsupported \"type\" (must be hid/serial/nano) or empty \"name\"");
         return QJsonObject();
