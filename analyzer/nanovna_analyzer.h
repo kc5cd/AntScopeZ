@@ -68,6 +68,12 @@ public:
     static int portsCount() { return m_listNanovnaPorts.size(); }
     static bool isConnected() { return m_isConnected; }
 
+    // Human-readable description of what this connection's "scan"
+    // capability probe settled on -- for MainWindow's connection-info
+    // status label. Returns a plain string rather than exposing the
+    // private ScanSupport enum itself.
+    QString scanCapabilityDescription() const;
+
 private:
     QSerialPort * m_comPort;
     QStringList m_comAvailables;

@@ -68,6 +68,16 @@ ReDeviceInfo::InterfaceType AnalyzerPro::connectionType()
     return ReDeviceInfo::WRONG;
 }
 
+QString AnalyzerPro::scanCapabilityDescription() const
+{
+    if (m_baseAnalyzer != nullptr && m_baseAnalyzer->connectionType() == ReDeviceInfo::NANO) {
+        NanovnaAnalyzer* nano = qobject_cast<NanovnaAnalyzer*>(m_baseAnalyzer);
+        if (nano != nullptr)
+            return nano->scanCapabilityDescription();
+    }
+    return QString();
+}
+
 double AnalyzerPro::getVersion() const
 {
     if(m_baseAnalyzer != nullptr)
@@ -363,7 +373,7 @@ void AnalyzerPro::beginDraining(quint32 total)
         // Nothing was actually outstanding (e.g. stopped right on a point
         // boundary) -- no need to enter the draining state at all.
         stopWatchdog();
-        emit statusMessageChanged(tr("Stopped by user."));
+        emit statusMessageChanged(tr("Ready"));
         return;
     }
     m_isDraining = true;
@@ -390,7 +400,7 @@ void AnalyzerPro::beginReconnectDrain()
     auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(this, &AnalyzerPro::analyzerFound, this, [this, conn](int) {
         disconnect(*conn);
-        finishDraining(tr("Stopped by user."));
+        finishDraining(tr("Ready"));
     });
 
     QTimer::singleShot(200, this, [this]() {
@@ -403,7 +413,7 @@ void AnalyzerPro::advanceDraining()
 {
     m_drainReceived++;
     if (m_drainReceived >= m_drainTotal) {
-        finishDraining(tr("Stopped by user."));
+        finishDraining(tr("Ready"));
         return;
     }
     emit statusMessageChanged(tr("Stopping — draining remaining data (%1/%2 points)...")
@@ -474,6 +484,7 @@ void AnalyzerPro::on_measure (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
             kickWatchdog();
+            emit statusMessageChanged(tr("Scanning (%1 points)...").arg(dotsNumber));
             return;
         }
     }
@@ -498,6 +509,7 @@ void AnalyzerPro::on_measureS21 (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->startMeasure(fqFrom, fqTo, m_dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
             kickWatchdog();
+            emit statusMessageChanged(tr("Scanning S21 (%1 points)...").arg(m_dotsNumber));
             return;
         }
     }
@@ -516,6 +528,7 @@ void AnalyzerPro::on_measureContinuous(qint64 fqFrom, qint64 fqTo, qint32 dotsNu
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
             kickWatchdog();
+            emit statusMessageChanged(tr("Scanning continuously (%1 points)...").arg(dotsNumber));
             return;
         }
     }
@@ -537,6 +550,7 @@ void AnalyzerPro::on_measureUser (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
             kickWatchdog();
+            emit statusMessageChanged(tr("Scanning (%1 points)...").arg(dotsNumber));
             return;
         }
     }
@@ -563,6 +577,7 @@ void AnalyzerPro::on_measureOneFq(QWidget* /*parent*/, qint64 fqFrom, qint32 dot
         m_baseAnalyzer->setIsFRXMode(true);
         m_baseAnalyzer->startMeasureOneFq(fqFrom,m_dotsNumber);
         kickWatchdog();
+        emit statusMessageChanged(tr("Scanning single frequency..."));
     }
 }
 
@@ -579,14 +594,22 @@ void AnalyzerPro::on_stopMeasure()
     // measurement was genuinely in progress.
     bool wasMeasuring = m_isMeasuring;
     PopUpIndicator::setIndicatorVisible(false);
-    setIsMeasuring(false);
-    m_chartCounter = 0;
 
-    // Snapshot before clearStitchState() -- beginDraining() needs to know
-    // how many points are still outstanding in the currently in-flight
-    // request alone (not the whole original scan, if stitched).
+    // Snapshot before m_chartCounter/clearStitchState() reset below --
+    // remainingPointsInCurrentRequest() (and so beginDraining()) needs to
+    // know how many points are still outstanding in the currently in-flight
+    // request alone (not the whole original scan, if stitched), which it
+    // can only read from m_chartCounter/m_stitchSegCounter *before* they're
+    // zeroed. Getting this ordering backwards (chartCounter already 0 ->
+    // "remaining" always reads as the full original total, however much of
+    // that had already arrived before Stop was clicked) is exactly what
+    // made draining always undercount what was really left and time out
+    // waiting for points that were never actually coming -- confirmed live
+    // 2026-09-04.
     quint32 remainingPoints = wasMeasuring ? remainingPointsInCurrentRequest() : 0;
 
+    setIsMeasuring(false);
+    m_chartCounter = 0;
     clearStitchState();
     if (m_baseAnalyzer != nullptr)
     {

@@ -11,7 +11,33 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Draining after Stop always timed out instead of completing normally:
+  `AnalyzerPro::on_stopMeasure()` computed "how many points are still
+  outstanding" *after* already zeroing the counter it needed to read,
+  so it always waited for the full original point count instead of
+  whatever was genuinely still in flight -- confirmed live, a 400-point
+  scan stopped partway drained 146/400 and then timed out waiting for
+  points that were never coming. Also: a clean drain now shows "Ready"
+  in the status bar instead of the confusingly identical wording a
+  timeout would show.
+- Connect Analyzer always highlighted the first detected device row on
+  reopen, even while already connected to a different one -- Connect
+  could silently reconnect to the wrong device if clicked without
+  checking closely. Now highlights whichever row matches the currently
+  selected connection.
+
 ### Added
+
+- Status bar's scan-progress label now updates when a scan *starts* too
+  (all scan types: Single, S21, Continuous, User, One Fq, TDR), not just
+  while stopping/draining.
+- New connection-info status-bar label (left side): model, connection
+  type (USB/Serial/NanoVNA ASCII/NanoVNA Binary/Bluetooth/BLE), classic
+  NanoVNA's own ASCII-vs-binary `scan` capability
+  (`NanovnaAnalyzer::scanCapabilityDescription()`), and device serial
+  where available. Updates on every connect/disconnect.
 
 - Stopping a scan that's still delivering data (e.g. a large point-count
   sweep) no longer leaves the app looking stopped while it silently keeps

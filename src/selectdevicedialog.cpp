@@ -450,7 +450,30 @@ void SelectDeviceDialog::onScan(ReDeviceInfo::InterfaceType type)
     }
         break;
     }
-    ui->tableWidget->setCurrentIndex(ui->tableWidget->model()->index(0, 0));
+
+    // Highlight whichever row matches the currently connected/selected
+    // device instead of always defaulting to the first one -- otherwise
+    // reopening this dialog while connected to (say) the second detected
+    // device highlighted the first one instead, and Connect would silently
+    // reconnect to the wrong device if clicked without checking closely.
+    int matchRow = -1;
+    for (int r = 0; r < ui->tableWidget->rowCount(); r++) {
+        QTableWidgetItem* name = ui->tableWidget->item(r, 0);
+        QTableWidgetItem* id = ui->tableWidget->item(r, 1);
+        if (name == nullptr || id == nullptr)
+            continue;
+        ReDeviceInfo::InterfaceType rowType = (ReDeviceInfo::InterfaceType)name->data(Qt::UserRole+1).toInt();
+        if (rowType != SelectionParameters::selected.type)
+            continue;
+        QString rowId = (rowType == ReDeviceInfo::HID)
+            ? id->data(Qt::UserRole+2).toString()
+            : id->data(Qt::DisplayRole).toString();
+        if (rowId == SelectionParameters::selected.id) {
+            matchRow = r;
+            break;
+        }
+    }
+    ui->tableWidget->setCurrentIndex(ui->tableWidget->model()->index(matchRow >= 0 ? matchRow : 0, 0));
 }
 
 QString SelectDeviceDialog::scanSilent(QString& device_name)

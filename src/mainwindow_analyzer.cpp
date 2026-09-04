@@ -96,6 +96,46 @@ void MainWindow::on_analyzerNameFound(QString name)
         ui->speedAccuracySlider->setEnabled(true);
     }
     m_calibration->init(m_analyzer->getSerialNumber());
+    updateConnectionStatusLabel();
+}
+
+// Connection-info half of the status bar (left, see mainwindow.cpp's
+// insertPermanentWidget(0, ...)) -- model/connection type/protocol,
+// updated on every connect/disconnect. Separate from m_statusLabel (scan
+// progress), which AnalyzerPro's own signals drive directly.
+void MainWindow::updateConnectionStatusLabel()
+{
+    if (m_connectionStatusLabel == nullptr)
+        return;
+
+    if (!m_analyzerConnected || m_analyzer == nullptr) {
+        m_connectionStatusLabel->setText(tr("Not connected"));
+        return;
+    }
+
+    QString typeStr;
+    switch (m_analyzer->connectionType()) {
+    case ReDeviceInfo::HID:    typeStr = tr("USB"); break;
+    case ReDeviceInfo::Serial: typeStr = tr("Serial"); break;
+    case ReDeviceInfo::NANO:   typeStr = tr("NanoVNA ASCII"); break;
+    case ReDeviceInfo::NANOV2: typeStr = tr("NanoVNA Binary"); break;
+    case ReDeviceInfo::BT:     typeStr = tr("Bluetooth"); break;
+    case ReDeviceInfo::BLE:    typeStr = tr("BLE"); break;
+    default:                  typeStr = tr("Unknown"); break;
+    }
+
+    AnalyzerParameters* param = AnalyzerParameters::current();
+    QString model = param != nullptr ? param->name() : m_connectedDeviceName;
+    QString serial = m_analyzer->getSerialNumber().trimmed();
+    QString scanCap = m_analyzer->scanCapabilityDescription(); // classic NanoVNA only -- empty otherwise
+
+    QString text = QStringLiteral("%1 — %2").arg(model, typeStr);
+    if (!scanCap.isEmpty())
+        text += QStringLiteral(" (%1)").arg(scanCap);
+    if (!serial.isEmpty())
+        text += QStringLiteral(" — %1").arg(serial);
+
+    m_connectionStatusLabel->setText(text);
 }
 
 void MainWindow::on_deviceDisconnected()
@@ -103,6 +143,7 @@ void MainWindow::on_deviceDisconnected()
     QWidget::setCursor(Qt::ArrowCursor);
     m_analyzerConnected = false;
     refreshWindowTitle();
+    updateConnectionStatusLabel();
     ui->singleStart->setEnabled(false);
     ui->continuousStartBtn->setEnabled(false);
     ui->actionAnalyzerData->setEnabled(false);

@@ -144,6 +144,10 @@ public:
     void setParseState(int _state);
     int  getParseState();
     ReDeviceInfo::InterfaceType connectionType();
+    // Empty for anything but a classic NanoVNA/H/H4 connection -- see
+    // NanovnaAnalyzer::scanCapabilityDescription()'s own comment. For
+    // MainWindow's connection-info status label.
+    QString scanCapabilityDescription() const;
 
 protected:
     bool createDevice(const SelectionParameters& param, BaseAnalyzer* analyzer=nullptr);

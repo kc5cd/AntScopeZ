@@ -640,6 +640,17 @@ void NanovnaAnalyzer::detectPorts()
     }
 }
 
+QString NanovnaAnalyzer::scanCapabilityDescription() const
+{
+    switch (m_scanSupport) {
+    case ScanSupport::AsciiAndBinary: return tr("ASCII+Binary");
+    case ScanSupport::AsciiOnly:      return tr("ASCII");
+    case ScanSupport::Unsupported:    return tr("Legacy");
+    case ScanSupport::Unknown:
+    default:                          return tr("Unknown");
+    }
+}
+
 RawData NanovnaAnalyzer::toRawData(QString& s1p)
 {
     RawData data;

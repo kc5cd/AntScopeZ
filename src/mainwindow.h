@@ -166,13 +166,16 @@ private:
 
     Print *m_print = nullptr;
 
-    // Permanent status-bar widget -- currently only shows
-    // AnalyzerPro::statusMessageChanged()'s text (scan-stop draining
-    // progress), but deliberately a general-purpose "application state"
-    // label, not a one-off "draining" widget -- see the design discussion
-    // this came out of for the other fields planned to live here later
-    // (analyzer type, points in progress, idle, ascii/binary protocol).
+    // Permanent status-bar widgets. m_connectionStatusLabel (left, inserted
+    // before m_statusLabel) shows model/connection type/protocol -- updated
+    // on connect/disconnect via updateConnectionStatusLabel(). m_statusLabel
+    // (right) shows AnalyzerPro::statusMessageChanged()'s text -- currently
+    // scan-start/draining progress, but deliberately general-purpose, not a
+    // one-off "draining" widget -- see the design discussion this came out
+    // of for other fields planned to live here later.
+    QLabel *m_connectionStatusLabel = nullptr;
     QLabel *m_statusLabel = nullptr;
+    void updateConnectionStatusLabel();
 
     bool m_isContinuos = false;
     int m_dotsNumber = 50;
