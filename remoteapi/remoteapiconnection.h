@@ -28,15 +28,27 @@ signals:
 private slots:
     void onReadyRead();
     void onDisconnected();
+    // Bound once at construction to AnalyzerPro's own connect/disconnect
+    // signals (not a specific GUI widget's) -- every open connection sees
+    // these, not just whichever one issued a connect/disconnect command.
+    void onAnalyzerFound(int index);
+    void onDeviceDisconnected();
 
 private:
     void handleLine(const QByteArray& line);
     void dispatch(const QJsonObject& request);
     void sendResponse(const QJsonObject& response, const QJsonValue& id);
     void sendError(const QJsonValue& id, const QString& message);
+    void sendEvent(const QString& eventName, const QJsonObject& fields);
+    QJsonObject deviceStatusObject() const;
 
     QJsonObject cmdStatus() const;
     QJsonObject cmdDevices() const;
+    // Both either return the success-case result fields, or set *error
+    // and return an empty object on failure -- dispatch() checks *error
+    // to decide sendResponse() vs sendError().
+    QJsonObject cmdConnect(const QJsonObject& request, QString* error);
+    QJsonObject cmdDisconnect();
 
     QTcpSocket* m_socket;
     MainWindow* m_mainWindow;
