@@ -216,6 +216,20 @@ int main(int argc, char *argv[])
         g_usbOnly = true;
     }
 
+    // -remote-api-port <n>: force the Remote API on regardless of the
+    // persisted Settings toggle (json-tcp-api branch) -- for headless/dev
+    // use, e.g. paired with -headless below. Silently ignored if malformed
+    // (missing value, non-numeric, out of range) rather than refusing to
+    // start the app over a CLI typo; applied once MainWindow exists, below.
+    int remoteApiPortOverride = -1; // -1 == no override requested
+    int remoteApiPortFlagIndex = args.indexOf("-remote-api-port");
+    if (remoteApiPortFlagIndex != -1 && remoteApiPortFlagIndex + 1 < args.size()) {
+        bool ok = false;
+        int port = args.at(remoteApiPortFlagIndex + 1).toInt(&ok);
+        if (ok && port > 0 && port <= 65535)
+            remoteApiPortOverride = port;
+    }
+
     g_raspbian = QSysInfo::productType().contains("raspbian", Qt::CaseInsensitive);
 
     // Read the persisted theme before building any stylesheet below --
@@ -242,6 +256,9 @@ int main(int argc, char *argv[])
 
     MainWindow w;
     g_mainWindow = w.m_mainWindow;
+
+    if (remoteApiPortOverride != -1)
+        w.setRemoteApiEnabled(true, static_cast<quint16>(remoteApiPortOverride));
 
     foreach (QString path, args) {
         if (path.contains(".asd")) {
