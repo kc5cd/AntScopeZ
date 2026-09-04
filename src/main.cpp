@@ -229,6 +229,13 @@ int main(int argc, char *argv[])
         if (ok && port > 0 && port <= 65535)
             remoteApiPortOverride = port;
     }
+    // -headless: skip w.show() only (see json-tcp-api's plan doc for why
+    // this is deliberately narrower than a full GUI-decoupled headless
+    // mode) -- MainWindow/AnalyzerPro are still built normally. Does NOT
+    // itself enable the Remote API; pair with -remote-api-port (or an
+    // already-persisted "Enable Remote API" setting) or the process runs
+    // with nothing visible and nothing reachable.
+    bool headless = args.contains("-headless");
 
     g_raspbian = QSysInfo::productType().contains("raspbian", Qt::CaseInsensitive);
 
@@ -266,7 +273,8 @@ int main(int argc, char *argv[])
             break;
         }
     }
-    w.show();
+    if (!headless)
+        w.show();
 
     return a.exec();
 }
