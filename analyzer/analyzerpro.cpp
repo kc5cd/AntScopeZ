@@ -582,13 +582,23 @@ void AnalyzerPro::on_newS21Data(S21Data _s21Data)
 void AnalyzerPro::on_newSParamPoint(SParamPoint sp)
 {
     // Same leftover-data-after-stop guard as on_newData()/on_newS21Data(),
-    // but deliberately not touching m_chartCounter/watchdog/completion --
-    // every point that carries S-param data also arrives via newData()
-    // (see NanovnaAnalyzer::parse()/emitPoint()), so on_newData() already
-    // owns end-of-scan tracking for it; this is purely supplementary data
-    // riding along the same point.
+    // but deliberately not touching m_chartCounter/completion -- every
+    // point that carries S-param data also arrives via newData() on the
+    // "scan"-command fast path (see NanovnaAnalyzer::emitPoint()), so
+    // on_newData() already owns end-of-scan tracking for it there.
+    //
+    // kickWatchdog() IS still needed here, though: on older firmware
+    // without "scan", NanovnaAnalyzer::parse()'s fallback WAIT_NANO_DATA_S21
+    // pass (the second half of the sweep/data-0/data-1 sequence) emits
+    // *only* newSParamPoint per point, no newData -- so without this call
+    // nothing kicks the watchdog for the whole back half of a fallback-tier
+    // scan, and a slow device can trip AnalyzerPro's own timeout mid-scan
+    // even while it's still sending valid data. Redundant (harmless -- just
+    // restarts the same timer) on the fast path, where on_newData() already
+    // kicked it for this same point moments earlier.
     if (!m_isMeasuring)
         return;
+    kickWatchdog();
     emit newSParamPoint(sp);
 }
 
