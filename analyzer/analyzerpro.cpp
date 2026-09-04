@@ -409,6 +409,13 @@ void AnalyzerPro::beginReconnectDrain()
     });
 }
 
+void AnalyzerPro::announceScanProgress()
+{
+    const quint32 finNum = m_calibrationMode ? m_dotsNumber : (m_dotsNumber > 0 ? m_dotsNumber - 1 : 0);
+    const quint32 total = finNum + 1;
+    emit statusMessageChanged(tr("Scanning (%1/%2 points)...").arg(m_chartCounter + 1).arg(total));
+}
+
 void AnalyzerPro::advanceDraining()
 {
     m_drainReceived++;
@@ -623,7 +630,16 @@ void AnalyzerPro::on_stopMeasure()
     // re-enable the scan buttons as part of normal completion; entering the
     // draining state afterward correctly re-disables them for its duration
     // instead of racing with (and losing to) that re-enable.
-    if (wasMeasuring && m_baseAnalyzer != nullptr) {
+    // stopCommandAbortsDevice() -- HID/Serial (the base implementation
+    // sends a real "off\r") and any other backend that genuinely tells the
+    // device to stop have nothing left to drain: the device was just told
+    // to stop and will comply, so waiting for "whatever's still
+    // outstanding" would wait for data that's now never coming, guaranteed
+    // to time out. Only backends confirmed to have no real wire-level
+    // abort (NanovnaAnalyzer, NanovnaV2Analyzer, BleAnalyzer) need this at
+    // all. Confirmed live 2026-09-04: a real Match device (HID) timed out
+    // every time here before this check existed.
+    if (wasMeasuring && m_baseAnalyzer != nullptr && !m_baseAnalyzer->stopCommandAbortsDevice()) {
         extern bool g_reconnectToDrain; // Settings > Developer, see main.cpp
         if (g_reconnectToDrain) {
             beginReconnectDrain();
@@ -704,12 +720,14 @@ void AnalyzerPro::on_newData(RawData _rawData)
         setIsMeasuring(false);
         PopUpIndicator::setIndicatorVisible(false);
         clearStitchState();
+        emit statusMessageChanged(tr("Ready"));
         if(!m_calibrationMode)
         {
             emit measurementComplete();
         }
         return;
     }
+    announceScanProgress();
     m_chartCounter++;
 }
 
@@ -735,12 +753,14 @@ void AnalyzerPro::on_newS21Data(S21Data _s21Data)
         m_chartCounter = 0;
         setIsMeasuring(false);
         PopUpIndicator::setIndicatorVisible(false);
+        emit statusMessageChanged(tr("Ready"));
         if(!m_calibrationMode)
         {
             emit measurementComplete();
         }
         return;
     }
+    announceScanProgress();
     m_chartCounter++;
 }
 
@@ -764,12 +784,14 @@ void AnalyzerPro::on_newUserData(RawData _rawData, UserData _userData)
         m_chartCounter = 0;
         PopUpIndicator::setIndicatorVisible(false);
         clearStitchState();
+        emit statusMessageChanged(tr("Ready"));
         if(!m_calibrationMode)
         {
             emit measurementComplete();
         }
     }else
     {
+        emit statusMessageChanged(tr("Scanning (%1/%2 points)...").arg(m_chartCounter).arg(m_dotsNumber+1));
         emit newUserData (_rawData, _userData);
     }
 }

@@ -49,6 +49,9 @@ public:
     virtual bool refreshConnection();
     virtual bool connectAnalyzer();
     virtual void disconnectAnalyzer();
+    // No real wire-level abort in this protocol -- see BaseAnalyzer's own
+    // comment on this method.
+    bool stopCommandAbortsDevice() const override { return false; }
 
     static void detectPorts();
     static QList<QSerialPortInfo> availablePorts() { return m_listNanovnaV2Ports; }

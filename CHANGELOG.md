@@ -13,6 +13,20 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ### Fixed
 
+- Draining always timed out on HID/Serial devices (e.g. Match): the
+  default `BaseAnalyzer::stopMeasure()` actually sends a real `"off\r"`
+  wire-level abort, so the device genuinely stops producing more data --
+  draining then waited for points that were never coming, by design,
+  guaranteed to time out. Only `NanovnaAnalyzer`/`NanovnaV2Analyzer`/
+  `BleAnalyzer` have no real abort and genuinely need to drain; new
+  `BaseAnalyzer::stopCommandAbortsDevice()` (default true, overridden
+  false on those three) lets `on_stopMeasure()` skip draining entirely
+  for everything else and go straight to "Ready". Confirmed live against
+  a real Match device.
+- Status bar never returned to "Ready" after a normal (uninterrupted)
+  scan completion -- it just sat on the last "Scanning..." message
+  until the next scan started.
+
 - Draining after Stop always timed out instead of completing normally:
   `AnalyzerPro::on_stopMeasure()` computed "how many points are still
   outstanding" *after* already zeroing the counter it needed to read,
@@ -32,7 +46,9 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 - Status bar's scan-progress label now updates when a scan *starts* too
   (all scan types: Single, S21, Continuous, User, One Fq, TDR), not just
-  while stopping/draining.
+  while stopping/draining, and now shows a live "Scanning (N/Total
+  points)..." count as each point actually arrives, not just a static
+  message shown once at the start.
 - New connection-info status-bar label (left side): model, connection
   type (USB/Serial/NanoVNA ASCII/NanoVNA Binary/Bluetooth/BLE), classic
   NanoVNA's own ASCII-vs-binary `scan` capability

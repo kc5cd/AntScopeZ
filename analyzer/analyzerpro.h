@@ -90,6 +90,10 @@ class AnalyzerPro : public QObject
     void beginDraining(quint32 total);
     void beginReconnectDrain();
     void advanceDraining(); // called from on_newData()/on_newS21Data()/on_newUserData()'s existing "!m_isMeasuring -> stale data" guard
+    // Live "Scanning (N/Total points)..." status-bar text -- called from
+    // the same three handlers, on every point, while a scan is actually in
+    // progress (not draining -- that's advanceDraining()'s own message).
+    void announceScanProgress();
     void finishDraining(const QString& reason); // "Stopped by user."/"Stopped by timeout..." -- also the idempotency guard for beginReconnectDrain()'s one-shot analyzerFound() connection
     // Kicks off segment 0 (or the single, non-stitched request if
     // buildStitchSegments() left m_stitchSegments empty) and sets
