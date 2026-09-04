@@ -50,7 +50,27 @@ QColor getColor(int _index)
     // MAX_COLOR, which is out of range on its own. Both previously reached
     // QColor::fromHsv() with an invalid hue (issue #35, reported during a
     // screenshot). Clamp the divisor and wrap the hue into [0, MAX_COLOR).
-    int colorCount = qMax(g_maxMeasurements-4, 1);
+    //
+    // colorCount must cover every index this function could actually be
+    // asked for, not just one slot per measurement. SWR/Phase/RL/Smith
+    // each request a single getColor(m_currentIndex) per measurement, but
+    // the S21 tab's 4 traces (on_newMeasurement()'s s21Color(idx..idx+3))
+    // reach 3 higher than that -- m_currentIndex itself only ever climbs
+    // to g_maxMeasurements (on_newMeasurement()'s own wraparound), so
+    // g_maxMeasurements+3 is the true highest index in play, and the
+    // fixed 5-entry palette above already covers indices 0-4, leaving
+    // (g_maxMeasurements+3)-5+1 = g_maxMeasurements-1 generated colors
+    // actually needed. The previous g_maxMeasurements-4 was sized for a
+    // 1-slot/measurement caller only: at the shipped default
+    // g_maxMeasurements=5 that made colorCount exactly 1, so `jump` was
+    // 360 and *every* index >=5 landed on the same hue (0, pure red) --
+    // not a rare collision, deterministic every time, and the direct
+    // cause of the S21 tab's later measurements all rendering identically
+    // red (found/fixed 2026-09-04, alongside giving S21 real per-
+    // measurement legend entries in on_newMeasurement() so this is at
+    // least visible in the legend even where colors still land close
+    // together for very large measurement counts).
+    int colorCount = qMax(g_maxMeasurements-1, 1);
     const int MAX_COLOR = 360;
     const int MIN_COLOR = 0;
     double jump = (MAX_COLOR-MIN_COLOR) / (colorCount*1.0);
@@ -386,10 +406,13 @@ void Measurements::deleteRow(int row)
             m_tdrWidget->legend->addItem(new QCPPlottableLegendItem(m_tdrWidget->legend, m_tdrWidget->graph(2)));
             m_tdrWidget->legend->addItem(new QCPPlottableLegendItem(m_tdrWidget->legend, m_tdrWidget->graph(3)));
 
-            m_s21Widget->legend->addItem(new QCPPlottableLegendItem(m_s21Widget->legend, m_s21Widget->graph(1)));
-            m_s21Widget->legend->addItem(new QCPPlottableLegendItem(m_s21Widget->legend, m_s21Widget->graph(2)));
-            m_s21Widget->legend->addItem(new QCPPlottableLegendItem(m_s21Widget->legend, m_s21Widget->graph(3)));
-            m_s21Widget->legend->addItem(new QCPPlottableLegendItem(m_s21Widget->legend, m_s21Widget->graph(4)));
+            // m_s21Widget deliberately NOT repaired here any more -- it now
+            // auto-adds a real, name-prefixed legend entry per measurement
+            // (on_newMeasurement()) instead of Rs/Rp/TDR's fixed, generic-
+            // labeled template, so its legend items already live and die
+            // with their own measurement's graphs via QCustomPlot's normal
+            // plottable-removal cleanup. No "new first measurement" case to
+            // patch up.
         }
         int selRow = (row >= m_measurements.length()) ? (row-1) : row;
         QModelIndex myIndex = m_tableWidget->model()->index( selRow, 0,
@@ -511,24 +534,35 @@ void Measurements::on_newMeasurement(QString name)
     m_rpWidget->graph()->setName("|Zp|");
     m_rlWidget->addGraph();
 
-    // Only the first measurement's 4 traces get legend entries (a
-    // per-quantity template, same as Rs/Rp/TDR below/above) -- not one
-    // set per measurement, which would just duplicate the same 4 labels.
-    m_s21Widget->setAutoAddPlottableToLegend(m_s21Widget->legend->itemCount() < 4);
+    // Every measurement gets its own 4 real legend entries now, each
+    // prefixed with that measurement's own name -- unlike Rs/Rp/TDR below/
+    // above, which still only ever label a fixed 4/3-entry template built
+    // from the first measurement's graphs. That fixed-template approach
+    // left every 2nd+ measurement's S21 traces both unlabeled AND, once
+    // getColor()'s palette runs out (see its own comment), frequently
+    // identical-looking red -- "a red trace with no legend entry at all"
+    // was the reported symptom this fixes (found/fixed 2026-09-04).
+    // Auto-add stays on permanently (no itemCount() gate): QCustomPlot
+    // removes a plottable's own legend entry when its graph is removed
+    // (deleteRow()), so each measurement's 4 entries clean up on their
+    // own -- nothing to "repair" the way the old fixed-template scheme
+    // needed (see deleteRow()'s "repair legend" block).
+    m_s21Widget->setAutoAddPlottableToLegend(true);
     // 4 graphs per measurement now (S21/S12 magnitude+phase, from a real
     // 2-port import's complex data -- see SParamPoint/populateSParamData()),
     // not the old 2 (live-only, magnitude+"stage", see S21Data's comment).
     // Magnitude (dB) traces share the default axis; phase (degrees) traces
     // use yAxis2, same as the old "Stage" trace did for its own scale.
+    const QString s21NamePrefix = name.isEmpty() ? QString() : (name + QStringLiteral(" - "));
     m_s21Widget->addGraph();
-    m_s21Widget->graph()->setName(tr("S21 (dB)"));
+    m_s21Widget->graph()->setName(s21NamePrefix + tr("S21 (dB)"));
     m_s21Widget->addGraph();
-    m_s21Widget->graph()->setName(tr("S21 (deg)"));
+    m_s21Widget->graph()->setName(s21NamePrefix + tr("S21 (deg)"));
     m_s21Widget->graph()->setValueAxis(m_s21Widget->yAxis2);
     m_s21Widget->addGraph();
-    m_s21Widget->graph()->setName(tr("S12 (dB)"));
+    m_s21Widget->graph()->setName(s21NamePrefix + tr("S12 (dB)"));
     m_s21Widget->addGraph();
-    m_s21Widget->graph()->setName(tr("S12 (deg)"));
+    m_s21Widget->graph()->setName(s21NamePrefix + tr("S12 (deg)"));
     m_s21Widget->graph()->setValueAxis(m_s21Widget->yAxis2);
 
     m_tdrWidget->setAutoAddPlottableToLegend(m_tdrWidget->legend->itemCount() < 3);

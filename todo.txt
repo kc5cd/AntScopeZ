@@ -1,0 +1,58 @@
+1) SWR band needs to be anchored 0-10, as its too easy to move vertical scale.
+   -- fixed 2026-09-02 on develop: mainwindow.cpp's setWidgetsSettings() had
+      the SWR chart's rangeDrag enabled on both axes; dropped Vertical so a
+      plain click-drag can't pan the Y-axis off its 1-10 clamp anymore.
+
+2) Bandnames don't populate on initial load:
+   -- turned out to be a symptom of #1 (chart panned off-center), not a
+      real bug. No action needed.
+
+3)  reference to qt.conf in user-guide is obsolete?
+
+4)  S21 tab trace colors diverge to red (no legend entry for it) once 3+
+    measurements are loaded at once -- found 2026-09-04 while eyeballing
+    NanoVnaEmulator scenario imports. Two compounding bugs in
+    measurements.cpp, both AntScopeZ-side (not the emulator/scenario files):
+    a) getColor()'s (measurements.cpp:33-62) out-of-range fallback:
+       colorCount = qMax(g_maxMeasurements-4, 1) -- at the default
+       g_maxMeasurements=5 this is 1, making jump=360/1, so *every* index
+       >=5 lands on hue 0 (pure red), deterministically, not a rare
+       collision.
+    b) S21 tab specifically burns the palette 4x faster than every other
+       tab: each measurement's S21dB/S21deg/S12dB/S12deg take a 4-wide
+       window (idx..idx+3, measurements.cpp:604-611), but m_currentIndex
+       only advances by 1 per measurement (measurements.cpp:548-550) --
+       consecutive measurements' windows overlap 3-of-4 slots and run past
+       the 5-entry palette starting at measurement #2, hitting the (a)
+       fallback by measurement #3-5. SWR/Phase/RL/Smith use a plain
+       getColor(m_currentIndex) (one slot/measurement, no overlap) so
+       they don't have this second problem, just (a) eventually.
+    Also: S21 tab's legend is gated to exactly 4 entries, added only for
+    measurement #1 (setAutoAddPlottableToLegend(itemCount()<4),
+    measurements.cpp:517) -- every later measurement's 4 S21 traces get
+    real colors (including the red-fallback ones) with *no* legend row at
+    all, unlike SWR/Phase/RL/Smith which never disable auto-add and so
+    label every measurement correctly.
+    -- (b)'s legend half fixed 2026-09-04: m_s21Widget now auto-adds a
+       real, name-prefixed legend entry per measurement (setAutoAddPlott-
+       ableToLegend(true), permanently, plus each setName() call prefixed
+       with that measurement's own name) instead of a fixed 4-row generic
+       template, and no longer needs deleteRow()'s legend-repair hack --
+       QCustomPlot cleans up a plottable's own legend entry when its graph
+       is removed. Every trace is identifiable now, red or not.
+    -- (a) fixed 2026-09-04 too: getColor()'s colorCount is now
+       qMax(g_maxMeasurements-1, 1), sized off the true highest index any
+       caller reaches (g_maxMeasurements+3, from the S21 tab's 4-wide
+       window) rather than g_maxMeasurements-4 (correct only for a
+       1-slot/measurement caller). At the shipped default
+       g_maxMeasurements=5 this raises colorCount from 1 (jump=360,
+       everything collapsed to hue 0) to 4 (jump=90, indices 5-8 spread
+       across 4 distinct hues) -- each measurement's 4 S21 traces now get
+       at most one hue landing on that rotation's red, not all 4.
+    -- Both halves confirmed working 2026-09-04, but parked: with several
+       measurements loaded the S21 tab (4 name-prefixed legend rows per
+       measurement, generated-hue colors) is technically correct but hard
+       to read/use in practice. Left in place as-is rather than reverted --
+       revisit the design later (fewer/shorter legend labels? one legend
+       row per measurement instead of 4? cap how many measurements' S21
+       traces show at once?) rather than iterating further blind.
