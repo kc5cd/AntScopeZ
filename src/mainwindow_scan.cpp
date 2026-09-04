@@ -557,7 +557,19 @@ void MainWindow::on_measurementComplete()
         return;
     }
 
-    if (m_analyzer->connectionType() == ReDeviceInfo::NANO)
+    // NanoVNA-family (both classic ASCII and V2/binary) finalizes through
+    // on_measurementCompleteNano() instead, driven by the backend's own
+    // completeMeasurement() signal -- see AnalyzerPro::connectSignals()'s
+    // completeMeasurement lambda. This early-return only ever checked NANO,
+    // not NANOV2 (added later as its own enum value, see redeviceinfo.h),
+    // so a V2/binary scan fell through all the way to this function's own
+    // autoPlaceAtLowestSwr() call below *and* on_measurementCompleteNano()'s
+    // -- two markers placed per scan instead of one. Classic ASCII never
+    // showed this because it actually matched NANO and returned here.
+    // Confirmed live 2026-09-04 against the NanoVNA emulator's binary
+    // profile.
+    if (m_analyzer->connectionType() == ReDeviceInfo::NANO ||
+        m_analyzer->connectionType() == ReDeviceInfo::NANOV2)
         return;
     // One Fq mode (Start==Stop or Range==0) isn't gated by g_developerMode
     // -- it's reachable in the shipped build regardless. Every wire request
