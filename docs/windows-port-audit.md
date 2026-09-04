@@ -147,6 +147,50 @@ on Windows."*
     libeay32.dll`/`ssleay32.dll` are dead weight from the old build and
     can be deleted — small, mechanical cleanup, safe to do without
     check-in.
+- **NSIS uninstaller ignores `/S` for UAC purposes (issue #14) —
+  investigated 2026-09-04, no CMake-only fix exists.** Confirmed live
+  (2026-09-04): `Uninstall.exe /S` still shows a `consent.exe` UAC prompt,
+  and exits 2 with nothing removed if declined. Root cause confirmed by
+  reading CPack's own template
+  (`<CMake install>\share\cmake-3.30\Modules\Internal\CPack\NSIS.template.in:41`,
+  a system file bundled with CMake itself — not part of this repo):
+  `RequestExecutionLevel admin` is hardcoded there, with no
+  `CPACK_NSIS_*` variable exposed to override it (checked the full
+  documented variable list in CMake's own `Help/cpack_gen/nsis.rst` —
+  nothing execution-level-related exists). This single script-wide NSIS
+  directive governs both the installer and the `WriteUninstaller`-
+  generated uninstaller stub; NSIS also only permits `RequestExecutionLevel`
+  once per script, so it can't be overridden a second time via
+  `CPACK_NSIS_DEFINES` injection either (would be a duplicate-directive
+  compile error). UAC prompting on launch of an `admin`-manifested EXE is
+  enforced by Windows itself before the process's own code (including
+  NSIS's `/S` handling) ever runs, so no in-script fix is possible without
+  changing the manifest itself.
+  **Real fixes both require an actual packaging-pipeline change, not a
+  CMake config tweak** — flagged per `CLAUDE.md`'s "check in before
+  anything structural or risky", not attempted without the repo owner's
+  sign-off:
+  1. NSIS's community `UAC.nsh` self-elevation pattern — ship the
+     installer/uninstaller as `asInvoker`, then have the script elevate
+     only the specific privileged operations (the `Program Files`/HKLM
+     writes) via a nested `ShellExecute("runas", ...)` call, with proper
+     fallback if the user declines. The standard, well-documented way to
+     get real silent-mode support out of an NSIS installer that needs
+     admin for only part of its work.
+  2. Post-build manifest patching — after `cpack -G NSIS` produces
+     `Uninstall.exe`, use Microsoft's `mt.exe` (or an equivalent manifest
+     tool) to replace its embedded manifest with `asInvoker`, keeping
+     `admin` on the installer only. Cheaper than (1) but more fragile
+     (extra build step, depends on CPack's internal staging layout not
+     changing) and doesn't solve the same problem as cleanly if the
+     uninstaller's file/registry deletes genuinely need elevation.
+  **Workaround in the meantime**: launch the uninstaller from an
+  *already-elevated* shell/process (e.g. `Start-Process ... -Verb RunAs`
+  before adding `/S`, or from an already-elevated management/CI agent) —
+  Windows doesn't re-prompt for UAC when the calling process is already
+  elevated, so `/S` behaves as expected in that case. This isn't a code
+  fix, just the operationally-safe way to drive unattended uninstalls
+  until (1) or (2) above is implemented.
 - **First native build baseline (this session):** see the
   `## Build baseline` section below once the first `windows-mingw`
   build finishes.
