@@ -140,12 +140,19 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
             } else if (data.startsWith("scan?")) {
                 m_scanSupport = ScanSupport::Unsupported;
             } else if (data.contains("ch>")) {
+                // Resolved one way or another -- probeBinaryScanSupport()
+                // below reuses m_scanProbeTimeoutTimer for its own stage
+                // (its start() call replaces this pending shot), and the
+                // WAIT_NANO_NO fallthrough stops it explicitly itself.
+                m_scanCapabilityProbeInProgress = false;
                 if (m_scanSupport == ScanSupport::AsciiOnly) {
                     probeBinaryScanSupport();
                     return arr.size();
                 }
                 if (m_scanSupport == ScanSupport::Unknown)
                     m_scanSupport = ScanSupport::Unsupported; // defensive: got a prompt without seeing either expected reply
+                if (m_scanProbeTimeoutTimer != nullptr)
+                    m_scanProbeTimeoutTimer->stop();
                 setParseState(WAIT_NANO_NO);
             }
         } else if (getParseState() == WAIT_NANO_SWEEP) {
@@ -550,8 +557,28 @@ void NanovnaAnalyzer::finishMeasurementSegment()
 
 void NanovnaAnalyzer::probeScanCapability()
 {
+    // Unlike every other stage of this handshake, a bare "scan" with no
+    // reply at all previously had nothing to time it out: AnalyzerPro's own
+    // watchdog only arms once a *measurement* starts (kickWatchdog(), called
+    // from on_measure*()), and this probe runs earlier, right after connect.
+    // Firmware that swallows this one command (seen on some clones) left
+    // the state machine stuck in WAIT_NANO_SCAN_PROBE forever -- and
+    // startMeasure()'s own "handshake still in flight, retry in 50ms" loop
+    // (see its comment) retries unboundedly on exactly that state, so the
+    // symptom was a Single/Continuous click that silently never scans, with
+    // no error ever surfaced. Same 3s backstop as probeBinaryScanSupport()
+    // below, and the same shared timer (only one of these two stages is
+    // ever in flight at once).
+    m_scanCapabilityProbeInProgress = true;
     setParseState(WAIT_NANO_SCAN_PROBE);
     sendData("scan\r\n");
+
+    if (m_scanProbeTimeoutTimer == nullptr) {
+        m_scanProbeTimeoutTimer = new QTimer(this);
+        m_scanProbeTimeoutTimer->setSingleShot(true);
+        connect(m_scanProbeTimeoutTimer, &QTimer::timeout, this, &NanovnaAnalyzer::onScanProbeTimeout);
+    }
+    m_scanProbeTimeoutTimer->start(3000);
 }
 
 void NanovnaAnalyzer::probeBinaryScanSupport()
@@ -579,6 +606,18 @@ void NanovnaAnalyzer::probeBinaryScanSupport()
 
 void NanovnaAnalyzer::onScanProbeTimeout()
 {
+    if (m_scanCapabilityProbeInProgress) {
+        // No reply at all to the bare "scan\r\n" probe -- assume this
+        // firmware doesn't have the command rather than leaving the state
+        // machine (and startMeasure()'s retry loop) stuck forever. Falls
+        // back to the classic sweep/frequencies/data-0/data-1 sequence,
+        // same as an explicit "scan?" reply would.
+        m_scanCapabilityProbeInProgress = false;
+        m_scanSupport = ScanSupport::Unsupported;
+        setParseState(WAIT_NANO_NO);
+        return;
+    }
+
     if (!m_scanBinaryProbeInProgress)
         return; // already resolved (parseBinaryScan() got there before the timer fired)
 

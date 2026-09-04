@@ -94,8 +94,9 @@ private:
 
     // "scan" command capability probe/state -- see ScanSupport's comment.
     ScanSupport m_scanSupport = ScanSupport::Unknown;
-    bool m_scanBinaryProbeInProgress = false;
-    QTimer* m_scanProbeTimeoutTimer = nullptr;
+    bool m_scanCapabilityProbeInProgress = false; // WAIT_NANO_SCAN_PROBE stage (bare "scan"), see probeScanCapability()
+    bool m_scanBinaryProbeInProgress = false;      // WAIT_NANO_SCAN_BINARY stage, see probeBinaryScanSupport()
+    QTimer* m_scanProbeTimeoutTimer = nullptr; // shared by both probe stages above -- only one is ever in flight at a time
     void probeScanCapability();
     void probeBinaryScanSupport();
     void onScanProbeTimeout();
