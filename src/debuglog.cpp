@@ -12,7 +12,7 @@ bool g_serialEnabled = false;
 bool g_usbHidEnabled = false;
 bool g_bleEnabled = false;
 bool g_nanovnaEnabled = false;
-bool g_bleShowPings = true;
+bool g_bleShowPings = false;
 bool g_detailedErrorsEnabled = false;
 
 // Kept open across calls rather than reopened per packet -- BLE especially

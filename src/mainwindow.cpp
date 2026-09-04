@@ -10,6 +10,7 @@
 #include "style.h"
 #include "filedialog.h"
 #include "editbandsdialog.h"
+#include "debuglog.h"
 #include <QWindow>
 #include <QActionGroup>
 
@@ -75,6 +76,11 @@ bool g_extendedChartZoom = false;
 // continuous sweep won't trip it. See AnalyzerPro's watchdog timer
 // (analyzer/analyzerpro.cpp).
 int g_analyzerTimeoutSec = 8;
+// "Use reconnect to drain unwanted data" (Settings > General) -- see
+// AnalyzerPro::beginReconnectDrain()'s comment for what this changes.
+// Moved here from a Developer-tab, session-only checkbox 2026-09-04; now
+// an ordinary persisted preference like the rest of this block.
+bool g_reconnectToDrain = false;
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -291,6 +297,8 @@ MainWindow::MainWindow(QWidget *parent) :
     g_analyzerMaxPoints = m_settings->value("analyzerMaxPoints", 1000).toInt();
     g_extendedChartZoom = m_settings->value("extendedChartZoom", false).toBool();
     g_analyzerTimeoutSec = m_settings->value("analyzerTimeoutSec", 8).toInt();
+    DebugLog::setDetailedErrorsEnabled(m_settings->value("reportDetailedErrors", false).toBool());
+    g_reconnectToDrain = m_settings->value("reconnectToDrain", false).toBool();
     m_activeThemeIndex = m_settings->value("activeTheme", 0).toInt();
     m_settings->endGroup();
 
@@ -1061,6 +1069,8 @@ MainWindow::~MainWindow()
     m_settings->setValue("analyzerMaxPoints", g_analyzerMaxPoints);
     m_settings->setValue("extendedChartZoom", g_extendedChartZoom);
     m_settings->setValue("analyzerTimeoutSec", g_analyzerTimeoutSec);
+    m_settings->setValue("reportDetailedErrors", DebugLog::detailedErrorsEnabled());
+    m_settings->setValue("reconnectToDrain", g_reconnectToDrain);
     m_settings->endGroup();
 
     m_settings->beginGroup("Cable");

@@ -31,6 +31,7 @@ extern int g_pointsWarnThreshold; // see mainwindow.cpp
 extern int g_analyzerMaxPoints; // see mainwindow.cpp
 extern bool g_extendedChartZoom; // see mainwindow.cpp
 extern int g_analyzerTimeoutSec; // see mainwindow.cpp
+extern bool g_reconnectToDrain; // see mainwindow.cpp
 extern QString appendSpaces(const QString& number);
 int Settings::m_serialIndex = 0;
 bool Settings::m_licenseUpdateBlocked = false;
@@ -131,6 +132,13 @@ Settings::Settings(QWidget *parent) :
     ui->lineEditAnalyzerMaxPoints->setText(QString::number(g_analyzerMaxPoints));
     ui->checkBoxExtendedChartZoom->setChecked(g_extendedChartZoom);
     ui->lineEdit_analyzerTimeout->setText(QString::number(g_analyzerTimeoutSec));
+    // Moved here from the Developer tab 2026-09-04 -- these are ordinary
+    // user-facing preferences, not debug/developer-only knobs, and now
+    // persist to the ini like the rest of the General tab (read here on
+    // open, written back in ~Settings() on close) instead of the
+    // session-only in-memory-only behavior they had before.
+    ui->checkBoxReportDetailedErrors->setChecked(DebugLog::detailedErrorsEnabled());
+    ui->checkBoxReconnectToDrain->setChecked(g_reconnectToDrain);
     m_settings->endGroup();
 
     // Debug Logging (Developer tab) -- deliberately NOT persisted to the
@@ -165,25 +173,6 @@ Settings::Settings(QWidget *parent) :
     ui->debugLogBleShowPingsCheckBox->setEnabled(ui->debugLogBleCheckBox->isChecked());
     connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, ui->debugLogBleShowPingsCheckBox, &QCheckBox::setEnabled);
     connect(ui->debugLogBleShowPingsCheckBox, &QCheckBox::clicked, DebugLog::setBleShowPings);
-
-    // Error Reporting & Logging -- same read-current-state fix as Debug
-    // Logging above. This one used to also force-reset the *actual*
-    // setting (DebugLog::setDetailedErrorsEnabled(false)), not just the
-    // checkbox -- a real functional regression on every Settings reopen,
-    // not just a cosmetic one.
-    ui->checkBoxReportDetailedErrors->setChecked(DebugLog::detailedErrorsEnabled());
-    connect(ui->checkBoxReportDetailedErrors, &QCheckBox::clicked, DebugLog::setDetailedErrorsEnabled);
-
-    // Stopping a Scan -- same read-current-state fix (see above) applied
-    // to g_reconnectToDrain, which had the identical bug from the day it
-    // was added. See AnalyzerPro::beginReconnectDrain()'s comment for what
-    // this actually changes.
-    extern bool g_reconnectToDrain; // main.cpp
-    ui->checkBoxReconnectToDrain->setChecked(g_reconnectToDrain);
-    connect(ui->checkBoxReconnectToDrain, &QCheckBox::clicked, [](bool checked) {
-        extern bool g_reconnectToDrain;
-        g_reconnectToDrain = checked;
-    });
 
     // "Data folder" -- the single UserDataDir every save/export/screenshot
     // dialog now defaults to (see FileDialog::userDataDir()), replacing the
@@ -386,6 +375,8 @@ Settings::~Settings()
     g_pointsWarnThreshold = qBound(50, ui->lineEditScanWarnThreshold->text().toInt(), POINTS_MAX);
     g_analyzerMaxPoints = qBound(50, ui->lineEditAnalyzerMaxPoints->text().toInt(), POINTS_MAX);
     g_extendedChartZoom = ui->checkBoxExtendedChartZoom->isChecked();
+    DebugLog::setDetailedErrorsEnabled(ui->checkBoxReportDetailedErrors->isChecked());
+    g_reconnectToDrain = ui->checkBoxReconnectToDrain->isChecked();
 
     m_settings->beginGroup("Settings");
     m_settings->setValue("restrictFq", m_restrictFq);
@@ -396,6 +387,8 @@ Settings::~Settings()
     m_settings->setValue("pointsWarnThreshold", g_pointsWarnThreshold);
     m_settings->setValue("analyzerMaxPoints", g_analyzerMaxPoints);
     m_settings->setValue("extendedChartZoom", g_extendedChartZoom);
+    m_settings->setValue("reportDetailedErrors", DebugLog::detailedErrorsEnabled());
+    m_settings->setValue("reconnectToDrain", g_reconnectToDrain);
 
     m_settings->setValue("currentIndex",ui->tabWidget->currentIndex());
     m_settings->endGroup();

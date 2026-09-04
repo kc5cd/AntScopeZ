@@ -77,8 +77,8 @@ class AnalyzerPro : public QObject
     // *current* in-flight request (not the whole original scan, if
     // stitched -- no further segments get requested once stopped) and
     // quietly discards it, bounded by the same watchdog timeout used
-    // everywhere else. Settings > Developer's "Use reconnect to drain
-    // unwanted data" checkbox (g_reconnectToDrain, main.cpp) switches to
+    // everywhere else. Settings > General's "Use reconnect to drain
+    // unwanted data" checkbox (g_reconnectToDrain, mainwindow.cpp) switches to
     // closing and reopening the connection instead -- often faster for a
     // large scan, but not guaranteed to make every device actually discard
     // what it already queued internally, only that we stop listening and

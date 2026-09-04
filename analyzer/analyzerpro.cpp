@@ -640,7 +640,7 @@ void AnalyzerPro::on_stopMeasure()
     // all. Confirmed live 2026-09-04: a real Match device (HID) timed out
     // every time here before this check existed.
     if (wasMeasuring && m_baseAnalyzer != nullptr && !m_baseAnalyzer->stopCommandAbortsDevice()) {
-        extern bool g_reconnectToDrain; // Settings > Developer, see main.cpp
+        extern bool g_reconnectToDrain; // Settings > General, see mainwindow.cpp
         if (g_reconnectToDrain) {
             beginReconnectDrain();
         } else {

@@ -12,11 +12,6 @@ bool g_developerMode = false;
 bool g_usbOnly = false;
 bool g_raspbian = false;
 bool g_bAA55modeNewProtocol = false;
-// Settings > Developer's "Use reconnect to drain unwanted data" checkbox --
-// see AnalyzerPro::on_stopMeasure()/beginReconnectDrain()'s own comments.
-// Off by default, not persisted across launches (matches this tab's other
-// checkboxes, e.g. the debug-log ones in settings.cpp).
-bool g_reconnectToDrain = false;
 MainWindow* g_mainWindow;
 
 #ifdef Q_OS_WIN
