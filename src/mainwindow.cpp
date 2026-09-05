@@ -193,13 +193,14 @@ MainWindow::MainWindow(QWidget *parent) :
 //    QRegExpValidator *validator = new QRegExpValidator(re, this);
 //    ui->lineEdit_fqFrom->setValidator(validator);
 //    ui->lineEdit_fqTo->setValidator(validator);
-    connect(ui->lineEdit_fqFrom, &QLineEdit::editingFinished, this, [=]() {
-        changeFqFrom(true);
-    });
-    connect(ui->lineEdit_fqTo, &QLineEdit::editingFinished, this, [=]() {
-        changeFqTo(true);
-    });
-
+    // lineEdit_fqFrom/fqTo's editingFinished() is already auto-connected to
+    // on_lineEdit_fqFrom_editingFinished()/on_lineEdit_fqTo_editingFinished()
+    // (mainwindow_frequency.cpp) by Qt's connectSlotsByName() inside
+    // ui->setupUi() above, via the on_<objectName>_<signal> naming
+    // convention -- an explicit connect() here to the same effective call
+    // (changeFqFrom(true)/changeFqTo(true)) used to run it a second time on
+    // every edit (issue #29's aside). Removed rather than kept as a
+    // "just in case" duplicate.
 
     m_qtLanguageTranslator = new QTranslator();
     m_qtBaseTranslator = new QTranslator();
@@ -462,6 +463,16 @@ MainWindow::MainWindow(QWidget *parent) :
     // speedAccuracySlider has focus and wants those same keys for itself.
     // This filter lets the slider claim them first; see eventFilter().
     ui->speedAccuracySlider->installEventFilter(this);
+
+    // Issue #29: QLineEdit::editingFinished() only fires on Enter/Return or
+    // an actual Qt focus transfer -- clicking a widget that doesn't itself
+    // accept focus (a QLabel, a chart's empty background, etc.) never moves
+    // focus away from lineEdit_fqFrom/fqTo, so their change/rescan logic
+    // never ran for that click. A filter on just those two widgets (like
+    // speedAccuracySlider's above) can't see this -- the click lands on some
+    // *other* widget entirely -- so this needs the application-wide net
+    // instead, watching every mouse press regardless of target.
+    qApp->installEventFilter(this);
 
     QShortcut *shortCtrlC = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_C),this);
     connect(shortCtrlC,SIGNAL(activated()),this,SLOT(on_pressCtrlC()));
@@ -1198,6 +1209,22 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             return true;
         }
     }
+
+    // Issue #29: force a real focus-out (which does fire editingFinished())
+    // on lineEdit_fqFrom/fqTo whenever a mouse press lands anywhere else,
+    // including on a widget that would never have taken focus away from
+    // them on its own. `obj != focused` skips the case where the press is
+    // on the field itself (repositioning the text cursor shouldn't blur
+    // it), and clicking the *other* of the two fields already worked
+    // correctly before this filter -- this just makes it also work for
+    // every non-focusable target (labels, chart backgrounds, etc.).
+    if (event->type() == QEvent::MouseButtonPress) {
+        QWidget* focused = QApplication::focusWidget();
+        if ((focused == ui->lineEdit_fqFrom || focused == ui->lineEdit_fqTo) && obj != focused) {
+            focused->clearFocus();
+        }
+    }
+
     return QMainWindow::eventFilter(obj, event);
 }
 
