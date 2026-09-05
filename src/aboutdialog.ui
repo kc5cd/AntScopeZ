@@ -108,6 +108,25 @@
     </widget>
    </item>
    <item>
+    <widget class="QLabel" name="creditsLabel">
+     <property name="text">
+      <string>Created by K4HEZ, with assistance from KC5CD, based on RigExpert's &lt;a href=&quot;https://rigexpert.com/software/antscope2/&quot;&gt;AntScope2&lt;/a&gt;.</string>
+     </property>
+     <property name="textFormat">
+      <enum>Qt::TextFormat::RichText</enum>
+     </property>
+     <property name="openExternalLinks">
+      <bool>true</bool>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignmentFlag::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
     <layout class="QVBoxLayout" name="verticalLayout_2">
      <property name="spacing">
       <number>0</number>
