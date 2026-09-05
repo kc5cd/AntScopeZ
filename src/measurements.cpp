@@ -1515,7 +1515,10 @@ void Measurements::on_newSParamPoint(SParamPoint sp)
         emit sparamDataStarted();
     }
 
-    on_redrawGraphs(true);
+    // See SParamPoint::skipRedraw's own comment -- on the NanoVNA "scan"
+    // fast path, on_newData() already redrew this exact point moments ago.
+    if (!sp.skipRedraw)
+        on_redrawGraphs(true);
 }
 
 

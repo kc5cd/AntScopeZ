@@ -561,7 +561,11 @@ void NanovnaAnalyzer::emitPoint(double fqMHz, std::complex<double> s11, std::com
     raw.x = z.imag();
     emit newData(raw);
 
-    emit newSParamPoint(makeSParamPoint(fqMHz, s11, s21));
+    // newData just above already covers this point's redraw -- see
+    // SParamPoint::skipRedraw's own comment. Issue #17.
+    SParamPoint sp = makeSParamPoint(fqMHz, s11, s21);
+    sp.skipRedraw = true;
+    emit newSParamPoint(sp);
 }
 
 std::complex<double> NanovnaAnalyzer::parseReIm(const QString& line)
