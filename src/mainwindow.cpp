@@ -290,6 +290,8 @@ MainWindow::MainWindow(QWidget *parent) :
     // not the -developer command-line flag.
     m_fqRestrict = m_settings->value("restrictFq", true).toBool();
     g_maxMeasurements = m_settings->value("maxMeasurements", MAX_MEASUREMENTS).toInt();
+    g_activeGraphPenWidth = m_settings->value("activeGraphPenWidth", g_activeGraphPenWidth).toInt();
+    g_inactiveGraphPenWidth = m_settings->value("inactiveGraphPenWidth", g_inactiveGraphPenWidth).toInt();
     g_maxMarkers = m_settings->value("maxMarkers", MAX_MARKERS).toInt();
     g_autoMarkerAtLowestSwr = m_settings->value("autoMarkerAtLowestSwr", true).toBool();
     g_pointsMax = m_settings->value("pointsMax", 1000).toInt();
@@ -1062,6 +1064,8 @@ MainWindow::~MainWindow()
     m_settings->beginGroup("Settings");
     m_settings->setValue("restrictFq", m_fqRestrict);
     m_settings->setValue("maxMeasurements", g_maxMeasurements);
+    m_settings->setValue("activeGraphPenWidth", g_activeGraphPenWidth);
+    m_settings->setValue("inactiveGraphPenWidth", g_inactiveGraphPenWidth);
     m_settings->setValue("maxMarkers", g_maxMarkers);
     m_settings->setValue("autoMarkerAtLowestSwr", g_autoMarkerAtLowestSwr);
     m_settings->setValue("pointsMax", g_pointsMax);

@@ -219,6 +219,66 @@
                 </item>
                </layout>
               </item>
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayout_37">
+                <item>
+                 <widget class="QSpinBox" name="spinBoxActiveLineWidth">
+                  <property name="toolTip">
+                   <string>Line width (pixels) for the currently-selected measurement's traces</string>
+                  </property>
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>10</number>
+                  </property>
+                  <property name="value">
+                   <number>5</number>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_activeLineWidth">
+                  <property name="toolTip">
+                   <string>Line width (pixels) for the currently-selected measurement's traces</string>
+                  </property>
+                  <property name="text">
+                   <string>Selected measurement line width</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayout_lineWidthInactive">
+                <item>
+                 <widget class="QSpinBox" name="spinBoxInactiveLineWidth">
+                  <property name="toolTip">
+                   <string>Line width (pixels) for every other loaded measurement's traces</string>
+                  </property>
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="maximum">
+                   <number>10</number>
+                  </property>
+                  <property name="value">
+                   <number>2</number>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="label_inactiveLineWidth">
+                  <property name="toolTip">
+                   <string>Line width (pixels) for every other loaded measurement's traces</string>
+                  </property>
+                  <property name="text">
+                   <string>Other measurements' line width</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
              </layout>
             </widget>
            </item>

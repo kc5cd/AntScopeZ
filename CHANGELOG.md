@@ -13,6 +13,38 @@ below should track `project(VERSION ...)` in `CMakeLists.txt`.
 
 ### Fixed
 
+- S21 tab: 3+ measurements loaded at once used to make later ones' traces
+  collapse to identical red (`getColor()`'s out-of-range fallback was
+  sized for 1 color/measurement, not the S21 tab's 4). Legend now shows
+  only the currently-selected measurement's 4 traces (S21/S12 dB+deg),
+  not every measurement's at once -- `Measurements::updateS21Legend()`
+  follows table-row selection the same way trace pen width already did.
+  Selecting a measurement (table click, or a just-finished scan) also
+  used to only thicken 1 of its 4 S21 graphs, in the wrong color (copied
+  from the SWR chart's own pen) -- now correctly thickens/thins all 4,
+  each keeping its own color.
+- S21/S12 traces are always solid now, not S21 dashed vs. S12 solid --
+  that distinction existed to keep an exactly-overlapping reciprocal
+  network's S21 from being fully hidden under S12, back when their
+  colors could collapse to the same value (see the red-collapse fix
+  above); now that each of the 4 traces reliably gets its own color, a
+  thick dashed line was just reading poorly for no remaining benefit.
+- Calibrating the Short or Load standard alone (Settings' "Calibrate
+  Short"/"Calibrate Load" buttons) never showed the busy indicator (the
+  red dot in the plot area's corner) for any of its capture -- only
+  "Calibrate Open" did. All 3 now show it the same way.
+- Renaming a measurement (the pencil icon) didn't rename it on the S21
+  tab's legend -- that measurement's 4 graphs (S21/S12 dB+deg) kept
+  showing the name it was scanned with.
+
+### Added
+
+- Measurements list: the rename pencil moved to the left of the Name
+  column (was to the right, past Points); the panel is also a bit wider
+  so all 4 columns fit without a horizontal scrollbar.
+
+- Settings > General: "Selected measurement line width" / "Other
+  measurements' line width" spinboxes (1-10px) -- was hardcoded (5/2).
 - A V2/binary NanoVNA scan placed two "lowest SWR" auto-markers per scan
   instead of one: `MainWindow::on_measurementComplete()`'s NanoVNA-family
   early-return only ever checked the classic `ReDeviceInfo::NANO` enum

@@ -50,15 +50,19 @@
 #define POINTS_MAX 10000
 
 #define MEASUREMENTS_TABLE_COLUMNS 4
+// Order here is the on-screen column order (every table-building/-updating
+// site uses these symbolic names, not hardcoded indices, so reordering the
+// enum alone reorders the columns) -- COL_MENU (the rename pencil) moved
+// left of COL_NAME 2026-09-05, was to its right.
 enum {
     COL_VISIBLE,
+    COL_MENU,
     COL_NAME,
     // Actual points received for that scan (Measurements::on_measurementComplete()) --
     // "--" until the scan finishes. Added to make a device silently returning
     // fewer points than requested (see analyzer/nanovna_analyzer.cpp,
     // HID/BLE transports) visible without reading a debug log.
-    COL_POINTS,
-    COL_MENU
+    COL_POINTS
 
 };
 #define COL_NAME_WD 150
