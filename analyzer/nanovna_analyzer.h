@@ -95,6 +95,10 @@ private:
     ScanSupport m_scanSupport = ScanSupport::Unknown;
     bool m_scanBinaryProbeInProgress = false;
     QTimer* m_scanProbeTimeoutTimer = nullptr;
+    // startMeasure()'s handshake-retry (see its own comment) -- a real
+    // QTimer rather than QTimer::singleShot() so stopMeasure() can actually
+    // cancel a pending retry. See issue #27.
+    QTimer* m_measureRetryTimer = nullptr;
     void probeScanCapability();
     void probeBinaryScanSupport();
     void onScanProbeTimeout();
