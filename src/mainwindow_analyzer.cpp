@@ -77,14 +77,17 @@ void MainWindow::on_analyzerNameFound(QString name)
     // (Settings::checkUpdatesBtn() -> AnalyzerPro::on_checkUpdatesBtn_clicked(),
     // wired up below).
 
-    if (name.contains("NanoVNA", Qt::CaseInsensitive)) {
-        ui->lineEdit_points->setEnabled(false);
-        ui->speedAccuracySlider->setEnabled(false);
-        setDotsNumber(100);
-    } else {
-        ui->lineEdit_points->setEnabled(true);
-        ui->speedAccuracySlider->setEnabled(true);
-    }
+    // Was hard-locked to 100 and disabled for any NanoVNA (present unchanged
+    // since this fork's first commit, no comment ever explaining why 100).
+    // Traced the actual wire path for issue #35: NanovnaAnalyzer::startMeasure()
+    // sends whatever point count it's given straight to the device's "scan"/
+    // "sweep" command with no clamping of its own (analyzer/nanovna_analyzer.cpp),
+    // so this was a pure GUI-side restriction, not a protocol limit -- and the
+    // repo owner confirmed their NanoVNA-H4 handles 400+ points fine over this
+    // same path. Now just uses the same enabled field/slider (and existing
+    // g_pointsMax clamp in setDotsNumber()) as every other analyzer.
+    ui->lineEdit_points->setEnabled(true);
+    ui->speedAccuracySlider->setEnabled(true);
     m_calibration->init(m_analyzer->getSerialNumber());
 }
 
