@@ -315,6 +315,17 @@ private:
     void showErrorPopup(QString text, int msDuration);
     void changeMeasurmentsColor(int _row, QColor& _color);
     void changeColorTheme(int themeIndex);
+    // Makes `index` the persisted active theme: writes "activeTheme" to
+    // QSettings (the one thing changeColorTheme() itself never does --
+    // it's also called for the *already*-active index from a couple of
+    // places, where re-persisting the same value would be a no-op), calls
+    // changeColorTheme(), and syncs the View > Theme menu's checked radio
+    // to match (setChecked(true) on an action in an exclusive QActionGroup
+    // unchecks its siblings for free). Used by both the View menu's own
+    // click handler and Settings > Themes' Apply button (issue #24) --
+    // needed so Apply's activation survives a restart the same way picking
+    // a theme from the View menu always has.
+    void activateThemeIndex(int index);
     // Updates the View > Theme menu's "N: Name" labels from Style::themeAt()
     // -- called after Settings > Themes saves any slot, since a rename could
     // be to a slot other than the currently-active one.

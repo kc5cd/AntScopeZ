@@ -1577,6 +1577,15 @@ void Settings::initThemesTab()
         // stylesheet on itself anymore (see the comment above Settings::Settings()).
     });
 
+    // Apply (issue #24): make the currently-selected theme the app's live
+    // active one, independent of Save -- themeComboBox's own selection
+    // never did this (see activateTheme()'s declaration for why), so
+    // there was no way to switch the live theme from here at all short of
+    // saving into whatever slot happened to already be active.
+    connect(ui->themeApplyBtn, &QPushButton::clicked, this, [this]() {
+        emit activateTheme(m_editingThemeIndex);
+    });
+
     ui->themeComboBox->setCurrentIndex(Style::activeThemeIndex());
     // setCurrentIndex() above only fires on_themeComboBox_currentIndexChanged()
     // if the index actually changes from the combo's default of 0 -- this

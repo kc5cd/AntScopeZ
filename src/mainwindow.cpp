@@ -885,10 +885,7 @@ MainWindow::MainWindow(QWidget *parent) :
             action->setChecked(i == m_activeThemeIndex);
             themeGroup->addAction(action);
             connect(action, &QAction::triggered, this, [this, i]() {
-                m_settings->beginGroup("Settings");
-                m_settings->setValue("activeTheme", i);
-                m_settings->endGroup();
-                changeColorTheme(i);
+                activateThemeIndex(i);
             });
         }
     }
