@@ -672,6 +672,41 @@ void MainWindow::on_measurementComplete()
 
 void MainWindow::on_measurementCompleteNano()
 {
+    // TdrScanPanel-triggered scan -- see the identical branch/comment in
+    // on_measurementComplete(). That function early-returns for NANO
+    // connections (see its own comment above), so its m_isTdrScanning
+    // branch never runs for a NanoVNA TDR scan -- confirmed as issue #30:
+    // without this, m_isTdrScanning stayed true forever and
+    // TdrScanPanel's controls (Cable Type/Vel. Factor/Points/re-scan)
+    // stayed disabled after the first NanoVNA TDR measurement, since
+    // nothing ever called setScanning(false) for that connection type.
+    // Duplicated rather than shared for the same reason as the #33 fix
+    // just below: on_measurementComplete() returns before reaching here.
+    if (m_isTdrScanning) {
+        m_measurements->stopTDRProgress();
+        m_measurements->on_measurementComplete();
+        m_isTdrScanning = false;
+        m_bInterrupted = true;
+        m_analyzer->setIsMeasuring(false);
+        PopUpIndicator::setIndicatorVisible(false);
+        if (m_tdrScanDialog != nullptr)
+            m_tdrScanDialog->panel()->setScanning(false);
+        ui->measurmentsDeleteBtn->setEnabled(true);
+        ui->measurmentsClearBtn->setEnabled(true);
+        ui->actionExport->setEnabled(true);
+        ui->measurmentsSaveBtn->setEnabled(true);
+        // See on_measurementComplete()'s identical comment: deferred so
+        // TdrScanPanel::refreshResult() (connected after this slot) still
+        // sees the just-used velocity factor when it runs.
+        {
+            double savedVf = m_tdrSavedVelFactor;
+            QTimer::singleShot(0, this, [this, savedVf]() {
+                m_measurements->setCableVelFactor(savedVf);
+            });
+        }
+        return;
+    }
+
 //{ TODO should be checked for autoclibration
     int autoCalibration = m_measurements->getAutoCalibration();
     if (autoCalibration != 0) {
