@@ -256,6 +256,26 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->tabWidget->setCurrentIndex(0);
     ui->tabWidget->setCurrentIndex(cur_index);
+    // The two calls above are a no-op signal-wise whenever cur_index == 0
+    // (the common case -- SWR, index 0, is both the tab widget's own
+    // default and the most-used tab) -- QTabWidget::setCurrentIndex()
+    // doesn't fire currentChanged() unless the index actually changes, and
+    // it's already sitting at 0 from createTabs()'s addTab() calls above,
+    // before either call here runs. Since Measurements::m_currentTab is
+    // only ever set from currentChanged() (via on_tabWidget_currentChanged()
+    // -> emit currentTab()), it stayed permanently empty for the rest of
+    // the session whenever this happened -- and on_redrawGraphs() dispatches
+    // purely on m_currentTab's exact tab-name string, so every scan's live
+    // chart update silently no-opped (matched no branch) until the user
+    // happened to switch tabs, or closeSettingsDialog()'s own equivalent
+    // re-sync (added earlier for a different reason, same root gap) ran.
+    // Root cause of issue #27 ("first click after launch shows nothing"),
+    // confirmed 2026-09-05 by tracing a live NanoVNA debug log where both
+    // scans completed identically at the wire level -- only the chart
+    // rendering silently failed for the first one. Force the sync
+    // unconditionally rather than relying on the two setCurrentIndex()
+    // calls to happen to produce a real change.
+    on_tabWidget_currentChanged(cur_index);
 #ifndef NO_MULTITAB
     connect(ui->tabWidget, &QTabWidget::currentChanged, this, [=](int index) {
         if (ui->tabWidget->widget(index) == m_tab_multi) {
