@@ -140,12 +140,19 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
             } else if (data.startsWith("scan?")) {
                 m_scanSupport = ScanSupport::Unsupported;
             } else if (data.contains("ch>")) {
+                // Resolved one way or another -- probeBinaryScanSupport()
+                // below reuses m_scanProbeTimeoutTimer for its own stage
+                // (its start() call replaces this pending shot), and the
+                // WAIT_NANO_NO fallthrough stops it explicitly itself.
+                m_scanCapabilityProbeInProgress = false;
                 if (m_scanSupport == ScanSupport::AsciiOnly) {
                     probeBinaryScanSupport();
                     return arr.size();
                 }
                 if (m_scanSupport == ScanSupport::Unknown)
                     m_scanSupport = ScanSupport::Unsupported; // defensive: got a prompt without seeing either expected reply
+                if (m_scanProbeTimeoutTimer != nullptr)
+                    m_scanProbeTimeoutTimer->stop();
                 setParseState(WAIT_NANO_NO);
             }
         } else if (getParseState() == WAIT_NANO_SWEEP) {
@@ -202,13 +209,8 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                         // stray extra line -- ignore, same as the S11 pass above
                     } else {
                         double fq = m_listFQ.at(m_fqCursor).toDouble() * 0.000001;
+                        std::complex<double> s11 = m_s11Buffer.at(m_fqCursor);
                         std::complex<double> s21 = parseReIm(data);
-                        SParamPoint sp;
-                        sp.fq = fq;
-                        sp.s11 = m_s11Buffer.at(m_fqCursor);
-                        sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
-                        sp.s21 = s21;
-                        sp.s22 = std::complex<double>(0,0);
                         m_fqCursor++;
                         // Same guard as the S11 pass above (WAIT_NANO_DATA's
                         // "if (raw.fq > 0)") and for the same reason: the
@@ -222,7 +224,7 @@ qint32 NanovnaAnalyzer::parse (QByteArray arr)
                         // that's what keeps this pass in sync with the S11
                         // pass's own identical one-bogus-entry absorption.
                         if (fq > 0) {
-                            emit newSParamPoint(sp);
+                            emit newSParamPoint(makeSParamPoint(fq, s11, s21));
                         }
                     }
                 }
@@ -399,6 +401,8 @@ void NanovnaAnalyzer::startScanSweep(bool useBinary)
 
     setParseState(useBinary ? WAIT_NANO_SCAN_BINARY : WAIT_NANO_SCAN_ASCII);
     QString cmd = QString("scan %1 %2 %3 %4\r\n").arg(m_fqFrom).arg(m_fqTo).arg(m_dotsNumber).arg(mask);
+    if (useBinary)
+        m_lastScanCommand = cmd.toLatin1(); // see parseBinaryScan()'s comment -- not needed for the ASCII tier, which already tolerates its own echo (emitPoint()'s fqMHz<=0 guard)
     sendData(cmd);
 }
 
@@ -423,6 +427,34 @@ void NanovnaAnalyzer::parseAsciiScanLine(const QString& line)
 
 qint32 NanovnaAnalyzer::parseBinaryScan()
 {
+    // The device echoes the exact command it was just sent, as its own
+    // "\r\n"-terminated text line, before its real reply -- same behavior
+    // the ASCII scan-line path already tolerates (parseAsciiScanLine()'s
+    // 5-token parse turns the echoed "scan ..." line into a point with
+    // freq==0, which emitPoint()'s "fqMHz <= 0" guard then drops -- see its
+    // own comment). This byte-buffer binary parser had no equivalent: it
+    // read the echo's own first 4 bytes as the mask/points header, which
+    // essentially never happens to match what was actually sent, so the
+    // "malformed reply" bail-out below fired on *every* binary probe/scan.
+    // For the capability probe specifically, that bail-out demoted
+    // m_scanSupport to AsciiOnly and reset parse state mid-handshake --
+    // which then corrupted the *next* real scan's own completion: its
+    // "ch>" prompt arrived merged with this leftover garbage in one chunk
+    // and matched the WAIT_NANO_SCAN_ASCII/WAIT_NANO_SCAN_BINARY "ch>"
+    // check immediately, calling finishMeasurementSegment() before a
+    // single real data point had been parsed -- the scan then continued to
+    // stream real data on the wire (confirmed via a live debug log,
+    // 2026-09-05) that the app was no longer listening for. Root cause of
+    // issues #27 (first scan after connect shows nothing) and #41 (binary
+    // mode negotiates successfully but is never actually used).
+    if (!m_lastScanCommand.isEmpty()) {
+        if (m_incomingBuffer.size() < m_lastScanCommand.size())
+            return 0; // echo hasn't fully arrived yet -- wait for more bytes
+        if (m_incomingBuffer.startsWith(m_lastScanCommand))
+            m_incomingBuffer.remove(0, m_lastScanCommand.size());
+        m_lastScanCommand.clear(); // only ever check once, right after this request
+    }
+
     const int HEADER_SIZE = 4; // uint16 mask + uint16 points, see NanoVNA-D main.c cmd_scan()'s SCAN_MASK_BINARY branch
 
     if (m_incomingBuffer.size() < HEADER_SIZE)
@@ -450,13 +482,20 @@ qint32 NanovnaAnalyzer::parseBinaryScan()
                 // include, previously just a silent beep+cancel with no
                 // message at all.
                 m_scanSupport = ScanSupport::AsciiOnly;
-                setIsMeasuring(false);
                 emit signalAnalyzerError(tr("NanoVNA binary scan reply didn't match the "
                                              "request (mask %1 vs %2, points %3 vs %4) -- "
                                              "falling back to ASCII scanning.")
                                               .arg(m_binaryMask).arg(m_binarySentMask)
                                               .arg(m_binaryPoints).arg(m_binarySentPoints));
                 emit signalMeasurementError();
+                // Route through the same completion path every other
+                // end-of-segment case uses instead of just clearing
+                // isMeasuring directly -- otherwise completeMeasurement()
+                // never fires, leaving the just-created (empty) measurement
+                // row orphaned and, in Continuous mode, the continuous flag
+                // stuck set. Also handles setParseState(WAIT_NANO_NO) itself.
+                finishMeasurementSegment();
+                return m_incomingBuffer.size(); // discard -- can't trust anything else in here
             }
             setParseState(WAIT_NANO_NO);
             return m_incomingBuffer.size(); // discard -- can't trust anything else in here
@@ -515,19 +554,17 @@ void NanovnaAnalyzer::emitPoint(double fqMHz, std::complex<double> s11, std::com
     if (fqMHz <= 0)
         return;
 
-    double re = s11.real(), im = s11.imag();
     RawData raw;
     raw.fq = fqMHz;
-    raw.r = (1-re*re-im*im)/((1-re)*(1-re)+im*im) * 50;
-    raw.x = (2*im)/((1-re)*(1-re)+im*im) * 50;
+    std::complex<double> z = impedanceFromReflection(s11);
+    raw.r = z.real();
+    raw.x = z.imag();
     emit newData(raw);
 
-    SParamPoint sp;
-    sp.fq = fqMHz;
-    sp.s11 = s11;
-    sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
-    sp.s21 = s21;
-    sp.s22 = std::complex<double>(0,0);
+    // newData just above already covers this point's redraw -- see
+    // SParamPoint::skipRedraw's own comment. Issue #17.
+    SParamPoint sp = makeSParamPoint(fqMHz, s11, s21);
+    sp.skipRedraw = true;
     emit newSParamPoint(sp);
 }
 
@@ -537,6 +574,26 @@ std::complex<double> NanovnaAnalyzer::parseReIm(const QString& line)
     if (tok.size() < 2)
         return std::complex<double>(0,0);
     return std::complex<double>(tok.at(0).toDouble(), tok.at(1).toDouble());
+}
+
+std::complex<double> NanovnaAnalyzer::impedanceFromReflection(std::complex<double> gamma)
+{
+    double re = gamma.real(), im = gamma.imag();
+    double denom = (1-re)*(1-re) + im*im;
+    double r = (1 - re*re - im*im) / denom * 50;
+    double x = (2*im) / denom * 50;
+    return std::complex<double>(r, x);
+}
+
+SParamPoint NanovnaAnalyzer::makeSParamPoint(double fqMHz, std::complex<double> s11, std::complex<double> s21)
+{
+    SParamPoint sp;
+    sp.fq = fqMHz;
+    sp.s11 = s11;
+    sp.s12 = std::complex<double>(0,0); // NanoVNA-family hardware only measures forward S11+S21 in one sweep
+    sp.s21 = s21;
+    sp.s22 = std::complex<double>(0,0);
+    return sp;
 }
 
 void NanovnaAnalyzer::finishMeasurementSegment()
@@ -554,8 +611,28 @@ void NanovnaAnalyzer::finishMeasurementSegment()
 
 void NanovnaAnalyzer::probeScanCapability()
 {
+    // Unlike every other stage of this handshake, a bare "scan" with no
+    // reply at all previously had nothing to time it out: AnalyzerPro's own
+    // watchdog only arms once a *measurement* starts (kickWatchdog(), called
+    // from on_measure*()), and this probe runs earlier, right after connect.
+    // Firmware that swallows this one command (seen on some clones) left
+    // the state machine stuck in WAIT_NANO_SCAN_PROBE forever -- and
+    // startMeasure()'s own "handshake still in flight, retry in 50ms" loop
+    // (see its comment) retries unboundedly on exactly that state, so the
+    // symptom was a Single/Continuous click that silently never scans, with
+    // no error ever surfaced. Same 3s backstop as probeBinaryScanSupport()
+    // below, and the same shared timer (only one of these two stages is
+    // ever in flight at once).
+    m_scanCapabilityProbeInProgress = true;
     setParseState(WAIT_NANO_SCAN_PROBE);
     sendData("scan\r\n");
+
+    if (m_scanProbeTimeoutTimer == nullptr) {
+        m_scanProbeTimeoutTimer = new QTimer(this);
+        m_scanProbeTimeoutTimer->setSingleShot(true);
+        connect(m_scanProbeTimeoutTimer, &QTimer::timeout, this, &NanovnaAnalyzer::onScanProbeTimeout);
+    }
+    m_scanProbeTimeoutTimer->start(3000);
 }
 
 void NanovnaAnalyzer::probeBinaryScanSupport()
@@ -571,7 +648,9 @@ void NanovnaAnalyzer::probeBinaryScanSupport()
     m_binaryExpectedBytes = -1;
 
     setParseState(WAIT_NANO_SCAN_BINARY);
-    sendData(QString("scan 1000000 2000000 2 %1\r\n").arg(mask));
+    QString cmd = QString("scan 1000000 2000000 2 %1\r\n").arg(mask);
+    m_lastScanCommand = cmd.toLatin1(); // see parseBinaryScan()'s comment
+    sendData(cmd);
 
     if (m_scanProbeTimeoutTimer == nullptr) {
         m_scanProbeTimeoutTimer = new QTimer(this);
@@ -583,6 +662,18 @@ void NanovnaAnalyzer::probeBinaryScanSupport()
 
 void NanovnaAnalyzer::onScanProbeTimeout()
 {
+    if (m_scanCapabilityProbeInProgress) {
+        // No reply at all to the bare "scan\r\n" probe -- assume this
+        // firmware doesn't have the command rather than leaving the state
+        // machine (and startMeasure()'s retry loop) stuck forever. Falls
+        // back to the classic sweep/frequencies/data-0/data-1 sequence,
+        // same as an explicit "scan?" reply would.
+        m_scanCapabilityProbeInProgress = false;
+        m_scanSupport = ScanSupport::Unsupported;
+        setParseState(WAIT_NANO_NO);
+        return;
+    }
+
     if (!m_scanBinaryProbeInProgress)
         return; // already resolved (parseBinaryScan() got there before the timer fired)
 
@@ -690,10 +781,9 @@ RawData NanovnaAnalyzer::toRawData(QString& s1p)
     double param2 = str.toDouble(&ok);
     if (!ok)
         qDebug() << "***** ERROR: " << str;
-    data.r = (1-param1*param1-param2*param2)/((1-param1)*(1-param1)+param2*param2);
-    data.x = (2*param2)/((1-param1)*(1-param1)+param2*param2);
-    data.r *= 50;
-    data.x *= 50;
+    std::complex<double> z = impedanceFromReflection(std::complex<double>(param1, param2));
+    data.r = z.real();
+    data.x = z.imag();
     return data;
 }
 

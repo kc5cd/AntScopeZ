@@ -114,6 +114,15 @@ struct SParamPoint {
         s21json["im"] = s21.imag();
         json["s21"] = s21json;
     }
+
+    // Set only by NanovnaAnalyzer::emitPoint()'s fast "scan"-command path,
+    // where newData() and newSParamPoint() are emitted back-to-back for
+    // this exact same point -- Measurements::on_newSParamPoint() uses this
+    // to skip its own redundant redraw, since on_newData()'s already
+    // covers it. Left false (default) everywhere else, including the
+    // older-firmware fallback tier, where S11/S21 arrive via two genuinely
+    // separate serial round-trips and each redraw is real. Issue #17.
+    bool skipRedraw = false;
 };
 
 struct GraphData {

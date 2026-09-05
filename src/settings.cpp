@@ -138,14 +138,17 @@ Settings::Settings(QWidget *parent) :
     m_settings->endGroup();
 
     // Debug Logging (Developer tab) -- deliberately NOT persisted to the
-    // ini and always starts unchecked: logging is opt-in per session, not
-    // a standing setting someone forgets they left on. Drives DebugLog's
-    // per-interface enable flags directly (also plain in-memory, not
-    // persisted) rather than through QSettings.
-    ui->debugLogSerialCheckBox->setChecked(false);
-    ui->debugLogUsbHidCheckBox->setChecked(false);
-    ui->debugLogBleCheckBox->setChecked(false);
-    ui->debugLogNanovnaCheckBox->setChecked(false);
+    // ini: logging is opt-in per session, not a standing setting someone
+    // forgets they left on. Drives DebugLog's per-interface enable flags
+    // directly (also plain in-memory, not persisted) rather than through
+    // QSettings. Read back DebugLog's own current state rather than just
+    // assuming unchecked -- it can already be true here, e.g. the
+    // -comserial/-usbhid/-nanovna/-ble CLI flags (main.cpp) set it before
+    // Settings is ever opened.
+    ui->debugLogSerialCheckBox->setChecked(DebugLog::serialEnabled());
+    ui->debugLogUsbHidCheckBox->setChecked(DebugLog::usbHidEnabled());
+    ui->debugLogBleCheckBox->setChecked(DebugLog::bleEnabled());
+    ui->debugLogNanovnaCheckBox->setChecked(DebugLog::nanovnaEnabled());
     connect(ui->debugLogSerialCheckBox, &QCheckBox::clicked, DebugLog::setSerialEnabled);
     connect(ui->debugLogUsbHidCheckBox, &QCheckBox::clicked, DebugLog::setUsbHidEnabled);
     connect(ui->debugLogBleCheckBox, &QCheckBox::clicked, DebugLog::setBleEnabled);
@@ -160,7 +163,20 @@ Settings::Settings(QWidget *parent) :
     ui->debugLogBleShowPingsCheckBox->setChecked(false);
     ui->debugLogBleShowPingsCheckBox->setEnabled(ui->debugLogBleCheckBox->isChecked());
     DebugLog::setBleShowPings(false);
-    connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, ui->debugLogBleShowPingsCheckBox, &QCheckBox::setEnabled);
+    // Was: connect(..., &QCheckBox::setEnabled) directly -- only toggled
+    // *enabled*, so unchecking BLE/Bluetooth after BLE Pings had been
+    // turned on left it disabled but still checked (and DebugLog still
+    // reporting pings), with no way to uncheck a disabled checkbox from the
+    // UI. Force it back off (both the checkbox and the underlying
+    // DebugLog state, same as loadDefaults()'s own initial state just
+    // above) whenever BLE/Bluetooth itself goes off. Issue #40.
+    connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, this, [=](bool checked) {
+        ui->debugLogBleShowPingsCheckBox->setEnabled(checked);
+        if (!checked) {
+            ui->debugLogBleShowPingsCheckBox->setChecked(false);
+            DebugLog::setBleShowPings(false);
+        }
+    });
     connect(ui->debugLogBleShowPingsCheckBox, &QCheckBox::clicked, DebugLog::setBleShowPings);
 
     // Error Reporting & Logging -- same session-only/off-by-default
@@ -1585,6 +1601,15 @@ void Settings::initThemesTab()
         // active slot -- qApp->setStyleSheet()/setPalette() there reaches this
         // already-open dialog for free now that Settings doesn't put a
         // stylesheet on itself anymore (see the comment above Settings::Settings()).
+    });
+
+    // Apply (issue #24): make the currently-selected theme the app's live
+    // active one, independent of Save -- themeComboBox's own selection
+    // never did this (see activateTheme()'s declaration for why), so
+    // there was no way to switch the live theme from here at all short of
+    // saving into whatever slot happened to already be active.
+    connect(ui->themeApplyBtn, &QPushButton::clicked, this, [this]() {
+        emit activateTheme(m_editingThemeIndex);
     });
 
     ui->themeComboBox->setCurrentIndex(Style::activeThemeIndex());

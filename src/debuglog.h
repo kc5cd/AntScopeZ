@@ -29,6 +29,14 @@ public:
     static void setUsbHidEnabled(bool enabled);
     static void setBleEnabled(bool enabled);
     static void setNanovnaEnabled(bool enabled);
+    // Readback for each of the four above -- lets a UI that displays these
+    // (Settings' Debug Logging checkboxes) reflect state set some other way
+    // (e.g. the -comserial/-usbhid/-nanovna/-ble CLI flags, main.cpp) instead
+    // of just assuming "off" whenever it's (re)constructed.
+    static bool serialEnabled();
+    static bool usbHidEnabled();
+    static bool bleEnabled();
+    static bool nanovnaEnabled();
 
     // BLE's once-a-second keepalive ping (BleAnalyzer::sendPing(),
     // BLE_PING_CMD) is legitimate traffic but drowns out real work in a

@@ -100,6 +100,10 @@ void DebugLog::setSerialEnabled(bool enabled) { g_serialEnabled = enabled; }
 void DebugLog::setUsbHidEnabled(bool enabled) { g_usbHidEnabled = enabled; }
 void DebugLog::setBleEnabled(bool enabled) { g_bleEnabled = enabled; }
 void DebugLog::setNanovnaEnabled(bool enabled) { g_nanovnaEnabled = enabled; }
+bool DebugLog::serialEnabled() { return g_serialEnabled; }
+bool DebugLog::usbHidEnabled() { return g_usbHidEnabled; }
+bool DebugLog::bleEnabled() { return g_bleEnabled; }
+bool DebugLog::nanovnaEnabled() { return g_nanovnaEnabled; }
 void DebugLog::setBleShowPings(bool show) { g_bleShowPings = show; }
 
 void DebugLog::setDetailedErrorsEnabled(bool enabled) { g_detailedErrorsEnabled = enabled; }
