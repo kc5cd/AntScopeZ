@@ -53,6 +53,7 @@ public:
 public slots:
     void clearTable(void);
     void on_remove();
+    void on_customContextMenuRequested(const QPoint& pos);
     QList<int> getColumns();
     void updateMarkers(int markers, int measurements, bool force = false);
     void updateInfo(QList<QList<QVariant>>& info);
@@ -74,6 +75,8 @@ protected:
 signals:
     void removeMarker(int);
     void changeColumns();
+    // Issue #36 -- table's right-click "Clear All".
+    void clearAllMarkers();
 
 private:
     QVBoxLayout* m_layout;

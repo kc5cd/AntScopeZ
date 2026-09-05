@@ -3,6 +3,7 @@
 #include "style.h"
 #include <QCoreApplication>
 #include <QHeaderView>
+#include <QMenu>
 
 QMap<int, QString> MarkersHeaderColumn::m_mapHeader;
 
@@ -18,6 +19,11 @@ MarkersPanel::MarkersPanel(QWidget *parent) : QWidget(parent)
     // Tab/Backtab move focus out of the table instead of cycling between
     // cells -- same reasoning as Presets::setTable() (presets.cpp).
     m_table->setTabKeyNavigation(false);
+    // Issue #36 -- right-click "Clear All" (removing every marker at once,
+    // vs. clicking each row's own "X" button individually).
+    m_table->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_table, &QTableWidget::customContextMenuRequested,
+            this, &MarkersPanel::on_customContextMenuRequested);
     m_layout->addWidget(m_table);
 
     QString path = Settings::setIniFile();
@@ -54,6 +60,16 @@ void MarkersPanel::createHeader()
     // Same as Presets::setTable() -- fits content, user-resizable.
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     m_table->resizeColumnsToContents();
+}
+
+void MarkersPanel::on_customContextMenuRequested(const QPoint& pos)
+{
+    if (m_markers == 0)
+        return; // nothing to clear
+    QMenu menu(this);
+    QAction* clearAll = menu.addAction(tr("Clear All"));
+    connect(clearAll, &QAction::triggered, this, &MarkersPanel::clearAllMarkers);
+    menu.exec(m_table->viewport()->mapToGlobal(pos));
 }
 
 void MarkersPanel::on_remove()
