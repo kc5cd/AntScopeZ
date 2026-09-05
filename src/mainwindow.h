@@ -405,6 +405,10 @@ public slots:
     void on_analyzerFound(int index);
     void on_analyzerNameFound(QString name);
     void on_deviceDisconnected();
+    // Menu action (issue #34) -- the backend (AnalyzerPro::on_disconnectDevice())
+    // already existed and was used internally (Settings, licenseagent), just
+    // had no user-facing entry point. No-ops if nothing is connected.
+    void on_disconnectAnalyzerRequested();
     // Rebuilds the window title from current state (m_analyzerConnected/
     // m_connectedDeviceName) in the active language -- the one place that
     // actually composes it, called from both connect/disconnect and from

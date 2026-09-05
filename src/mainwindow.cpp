@@ -607,6 +607,7 @@ MainWindow::MainWindow(QWidget *parent) :
     });
 
     connect(ui->actionConnectAnalyzer, &QAction::triggered, this, &MainWindow::on_selectDeviceDialog);
+    connect(ui->actionDisconnectAnalyzer, &QAction::triggered, this, &MainWindow::on_disconnectAnalyzerRequested);
 
     changeColorTheme(m_activeThemeIndex);
 

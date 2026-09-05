@@ -175,6 +175,13 @@ void MainWindow::on_actionScreenshotAA_triggered()
     m_screenshot = nullptr;
 }
 
+void MainWindow::on_disconnectAnalyzerRequested()
+{
+    if (!m_analyzerConnected)
+        return;
+    m_analyzer->on_disconnectDevice(); // emits deviceDisconnected() -> on_deviceDisconnected() does the rest
+}
+
 void MainWindow::on_selectDeviceDialog()
 {
     if (g_usbOnly) {

@@ -1156,6 +1156,7 @@ process in the settings menu!</string>
    <addaction name="menuView"/>
    <addaction name="menuTools"/>
    <addaction name="actionConnectAnalyzer"/>
+   <addaction name="actionDisconnectAnalyzer"/>
    <addaction name="menuHelp"/>
   </widget>
   <action name="actionImport">
@@ -1209,6 +1210,14 @@ process in the settings menu!</string>
   <action name="actionConnectAnalyzer">
    <property name="text">
     <string>Connect &amp;Analyzer...</string>
+   </property>
+  </action>
+  <action name="actionDisconnectAnalyzer">
+   <property name="text">
+    <string>Disconnect Analyzer</string>
+   </property>
+   <property name="toolTip">
+    <string>Disconnect the currently connected analyzer</string>
    </property>
   </action>
   <action name="actionMarkerComparison">
