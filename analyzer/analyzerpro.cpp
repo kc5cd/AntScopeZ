@@ -393,12 +393,30 @@ void AnalyzerPro::on_measureS21 (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
 
 void AnalyzerPro::on_measureContinuous(qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
 {
+    // NanoVNA drives its own continuous restart internally
+    // (NanovnaAnalyzer::finishMeasurementSegment() calls startMeasure()
+    // again itself when getContinuos() is true) -- this signal still
+    // arrives once per segment anyway (MainWindow::on_measurementCompleteNano()
+    // emits it unconditionally), but always while m_isMeasuring is still
+    // true (mid-segment), so the old NANO check below -- nested inside
+    // `if(!m_isMeasuring)` -- could never actually run for this call; it
+    // fell straight through to on_stopMeasure() instead, which tore down
+    // AnalyzerPro's own m_isMeasuring/watchdog state moments before the
+    // driver's own restart happened anyway. The device kept scanning
+    // regardless, but on_newData()'s `if (!m_isMeasuring) return;` guard
+    // then silently discarded every point from the restarted segment on.
+    // Confirmed root cause of issue #33 ("continuous sweep doesn't work"
+    // on NanoVNA) -- HID/COM analyzers don't self-loop like this, so they
+    // still need the logic below; NANO just needs to be left alone here.
+    if (m_baseAnalyzer != nullptr && m_baseAnalyzer->connectionType() == ReDeviceInfo::NANO)
+        return;
+
     if(!m_isMeasuring)
     {
         setIsMeasuring(true);
         emit continueMeasurement(fqFrom, fqTo, dotsNumber);
         m_chartCounter = 0;
-        if (m_baseAnalyzer != nullptr && m_baseAnalyzer->connectionType() != ReDeviceInfo::NANO)
+        if (m_baseAnalyzer != nullptr)
         {
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
