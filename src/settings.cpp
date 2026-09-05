@@ -159,7 +159,20 @@ Settings::Settings(QWidget *parent) :
     ui->debugLogBleShowPingsCheckBox->setChecked(false);
     ui->debugLogBleShowPingsCheckBox->setEnabled(ui->debugLogBleCheckBox->isChecked());
     DebugLog::setBleShowPings(false);
-    connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, ui->debugLogBleShowPingsCheckBox, &QCheckBox::setEnabled);
+    // Was: connect(..., &QCheckBox::setEnabled) directly -- only toggled
+    // *enabled*, so unchecking BLE/Bluetooth after BLE Pings had been
+    // turned on left it disabled but still checked (and DebugLog still
+    // reporting pings), with no way to uncheck a disabled checkbox from the
+    // UI. Force it back off (both the checkbox and the underlying
+    // DebugLog state, same as loadDefaults()'s own initial state just
+    // above) whenever BLE/Bluetooth itself goes off. Issue #40.
+    connect(ui->debugLogBleCheckBox, &QCheckBox::toggled, this, [=](bool checked) {
+        ui->debugLogBleShowPingsCheckBox->setEnabled(checked);
+        if (!checked) {
+            ui->debugLogBleShowPingsCheckBox->setChecked(false);
+            DebugLog::setBleShowPings(false);
+        }
+    });
     connect(ui->debugLogBleShowPingsCheckBox, &QCheckBox::clicked, DebugLog::setBleShowPings);
 
     // Error Reporting & Logging -- same session-only/off-by-default
