@@ -19,6 +19,13 @@ void MainWindow::on_actionMarkerComparison_triggered()
         // (WA_DeleteOnClose above), no manual disconnect needed.
         connect(m_analyzer, &AnalyzerPro::measurementComplete,
                 m_markerComparisonDialog, &MarkerComparisonDialog::refresh);
+        // NanoVNA connections never fire measurementComplete() at a real
+        // completion (see the identical fix/comment for TdrScanPanel::
+        // refreshResult() further down in this file, on_actionTDRMeasurement_
+        // triggered()) -- without this, the combos/values here never updated
+        // live for a NanoVNA scan while this dialog was open. Fixes #39.
+        connect(m_analyzer, &AnalyzerPro::measurementCompleteNano,
+                m_markerComparisonDialog, &MarkerComparisonDialog::refresh);
         // A marker added/removed on the plots doesn't produce a new sweep
         // (no measurementComplete above), so the combos need their own hook
         // to pick it up without the user having to reopen this dialog.
