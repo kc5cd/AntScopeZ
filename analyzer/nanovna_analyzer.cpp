@@ -330,11 +330,31 @@ void NanovnaAnalyzer::startMeasure(qint64 fqFrom, qint64 fqTo, int dotsNumber, b
         // running from the moment this measurement was requested) is the
         // backstop if the device is genuinely wedged, same as it is for any
         // other stuck scan -- no need for a second, duplicate timeout here.
-        QTimer::singleShot(50, this, [this, fqFrom, fqTo, dotsNumber, frx]() {
+        //
+        // A real (reusable) QTimer, not QTimer::singleShot() -- the latter
+        // gave stopMeasure() no way to cancel a pending retry. Without that,
+        // clicking Single again while this first attempt was still waiting
+        // out the handshake got read as "Stop" (AnalyzerPro::m_isMeasuring
+        // was already true from the initial click), which reset the whole
+        // UI back to idle -- but the retry fired anyway once the handshake
+        // settled a moment later, silently starting a scan the app no
+        // longer thought was running. Its points were real but had nowhere
+        // to land (chart/UI already back to "idle"), matching the exact
+        // reported symptom for issue #27: first click shows nothing, second
+        // click (now with no handshake left to race) works normally.
+        if (m_measureRetryTimer == nullptr) {
+            m_measureRetryTimer = new QTimer(this);
+            m_measureRetryTimer->setSingleShot(true);
+        }
+        m_measureRetryTimer->disconnect(); // drop any previous retry's lambda before arming a new one
+        connect(m_measureRetryTimer, &QTimer::timeout, this, [this, fqFrom, fqTo, dotsNumber, frx]() {
             startMeasure(fqFrom, fqTo, dotsNumber, frx);
         });
+        m_measureRetryTimer->start(50);
         return;
     }
+    if (m_measureRetryTimer != nullptr)
+        m_measureRetryTimer->stop(); // this attempt is proceeding for real now -- nothing left to retry
     Q_UNUSED (frx)
     m_fqFrom = fqFrom;
     m_fqTo = fqTo;
@@ -636,6 +656,10 @@ void NanovnaAnalyzer::onScanProbeTimeout()
 void NanovnaAnalyzer::stopMeasure()
 {
     m_isMeasuring = false;
+    // Cancel a pending handshake-retry scan request, if one's in flight --
+    // see startMeasure()'s comment. Issue #27.
+    if (m_measureRetryTimer != nullptr)
+        m_measureRetryTimer->stop();
 }
 
 void NanovnaAnalyzer::makeScreenshot()

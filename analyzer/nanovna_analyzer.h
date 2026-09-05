@@ -98,6 +98,10 @@ private:
     bool m_scanCapabilityProbeInProgress = false; // WAIT_NANO_SCAN_PROBE stage (bare "scan"), see probeScanCapability()
     bool m_scanBinaryProbeInProgress = false;      // WAIT_NANO_SCAN_BINARY stage, see probeBinaryScanSupport()
     QTimer* m_scanProbeTimeoutTimer = nullptr; // shared by both probe stages above -- only one is ever in flight at a time
+    // startMeasure()'s handshake-retry (see its own comment) -- a real
+    // QTimer rather than QTimer::singleShot() so stopMeasure() can actually
+    // cancel a pending retry. See issue #27.
+    QTimer* m_measureRetryTimer = nullptr;
     void probeScanCapability();
     void probeBinaryScanSupport();
     void onScanProbeTimeout();
