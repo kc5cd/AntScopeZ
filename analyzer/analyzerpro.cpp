@@ -362,7 +362,6 @@ void AnalyzerPro::on_measure (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->setIsFRXMode(true);
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
-            kickWatchdog();
             return;
         }
     }
@@ -386,7 +385,6 @@ void AnalyzerPro::on_measureS21 (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->setIsS21Mode(true);
             m_baseAnalyzer->startMeasure(fqFrom, fqTo, m_dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
-            kickWatchdog();
             return;
         }
     }
@@ -404,7 +402,6 @@ void AnalyzerPro::on_measureContinuous(qint64 fqFrom, qint64 fqTo, qint32 dotsNu
         {
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
-            kickWatchdog();
             return;
         }
     }
@@ -425,7 +422,6 @@ void AnalyzerPro::on_measureUser (qint64 fqFrom, qint64 fqTo, qint32 dotsNumber)
             m_baseAnalyzer->setIsFRXMode(false);
             startStitchedMeasure(fqFrom, fqTo, dotsNumber);
             PopUpIndicator::setIndicatorVisible(true);
-            kickWatchdog();
             return;
         }
     }
@@ -451,7 +447,6 @@ void AnalyzerPro::on_measureOneFq(QWidget* /*parent*/, qint64 fqFrom, qint32 dot
     {
         m_baseAnalyzer->setIsFRXMode(true);
         m_baseAnalyzer->startMeasureOneFq(fqFrom,m_dotsNumber);
-        kickWatchdog();
     }
 }
 
@@ -467,7 +462,6 @@ void AnalyzerPro::on_stopMeasure()
     // second marker every time Settings was opened. Only emit it if a
     // measurement was genuinely in progress.
     bool wasMeasuring = m_isMeasuring;
-    stopWatchdog();
     PopUpIndicator::setIndicatorVisible(false);
     setIsMeasuring(false);
     m_chartCounter = 0;
@@ -538,7 +532,6 @@ void AnalyzerPro::on_newData(RawData _rawData)
     if(m_chartCounter > finNum || !m_isMeasuring)
     {
         //qDebug() << "AnalyzerPro::on_newData COMPLETE";
-        stopWatchdog();
         m_chartCounter = 0;
         setIsMeasuring(false);
         PopUpIndicator::setIndicatorVisible(false);
@@ -566,7 +559,6 @@ void AnalyzerPro::on_newS21Data(S21Data _s21Data)
     if(m_chartCounter > finNum || !m_isMeasuring)
     {
         qDebug() << "AnalyzerPro::on_newS21Data COMPLETE";
-        stopWatchdog();
         m_chartCounter = 0;
         setIsMeasuring(false);
         PopUpIndicator::setIndicatorVisible(false);
@@ -612,7 +604,6 @@ void AnalyzerPro::on_newUserData(RawData _rawData, UserData _userData)
     advanceStitchSegmentIfNeeded();
     if(++m_chartCounter == m_dotsNumber+1 || !m_isMeasuring)
     {
-        stopWatchdog();
         emit newUserData (_rawData, _userData);
         setIsMeasuring(false);
         m_chartCounter = 0;
@@ -787,7 +778,6 @@ void AnalyzerPro::on_measureCalib(int dotsNumber)
     if(m_baseAnalyzer != nullptr)
     {
         m_baseAnalyzer->startMeasure(minFq_, maxFq_, dotsNumber);
-        kickWatchdog();
     }
 }
 
@@ -804,6 +794,13 @@ void AnalyzerPro::setIsMeasuring (bool _isMeasuring)
         m_baseAnalyzer->setIsMeasuring(_isMeasuring);
     }
     PopUpIndicator::setIndicatorVisible(_isMeasuring);
+    // ISSUE #19: centralized here instead of at every individual
+    // measurement-start/completion call site -- see the comment on
+    // m_watchdogTimer (analyzerpro.h) for the full reasoning.
+    if (_isMeasuring)
+        kickWatchdog();
+    else
+        stopWatchdog();
 }
 
 void AnalyzerPro::setContinuos(bool _isContinuos)
