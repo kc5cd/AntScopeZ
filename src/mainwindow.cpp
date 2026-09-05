@@ -790,10 +790,44 @@ MainWindow::MainWindow(QWidget *parent) :
     // Band Selector: same "band-selector-enabled" QSettings key and
     // presetsBandComboBox visibility toggle checkBoxBandSelector used to
     // drive via Settings' bandSelectorEnabledChanged signal.
+    //
+    // ISSUE #23 (2026-09-04): repo owner reported the band dropdown not
+    // showing by default, and decided -- "for now" -- that this control
+    // should just always start enabled on launch, full stop, regardless
+    // of whatever's persisted from a prior run. Two things were previously
+    // making it come up disabled: (a) any settings file predating the
+    // "seed enabled on first run" logic in populateBandSelector()
+    // (mainwindow_presets_bands.cpp) never gets that seed applied
+    // retroactively -- it only fires once, on a key that has never
+    // existed; (b) issue #21 (current_band drift) can make that same seed
+    // compute "disabled" even on an apparently-fresh run, if the
+    // persisted current_band string doesn't match a real loaded region.
+    // Rather than pick between "fix the seed's one-shot guard" and "fix
+    // #21 first and see if that alone resolves it", the owner's call was
+    // to just force this true unconditionally as an immediate, simple
+    // stopgap -- with the real long-term question ("should this persist
+    // across restarts at all, and if so how") deliberately left open,
+    // to be decided later.
+    //
+    // bandSelectorEnabledPersisted below is intentionally read (not
+    // deleted) even though its value doesn't drive the startup default
+    // anymore -- keeps the ini-read code path alive and in the same shape
+    // it'll need to be in whenever that longer-term decision is made,
+    // instead of ripping it out now only to re-add it later. The toggle
+    // handler just below (which DOES still write this key on every
+    // uncheck/recheck) is completely unchanged -- unchecking Band
+    // Selector still works normally for the rest of this run, it's only
+    // the value this block starts from on the *next* launch that's now
+    // ignored.
     {
         m_settings->beginGroup("Settings");
-        bool bandSelectorEnabled = m_settings->value("band-selector-enabled", false).toBool();
+        bool bandSelectorEnabledPersisted = m_settings->value("band-selector-enabled", false).toBool();
         m_settings->endGroup();
+        qDebug() << "Band Selector: ini had band-selector-enabled ="
+                 << bandSelectorEnabledPersisted
+                 << "-- ignored, forcing enabled=true at startup per issue #23";
+
+        bool bandSelectorEnabled = true; // forced -- see comment above, not read from ini
         ui->actionBandSelector->setChecked(bandSelectorEnabled);
         ui->presetsBandComboBox->setVisible(bandSelectorEnabled);
     }
