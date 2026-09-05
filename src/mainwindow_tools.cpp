@@ -79,6 +79,20 @@ void MainWindow::on_actionTDRMeasurement_triggered()
         // guarantee TDRAnalysisDialog::refresh() relied on.
         connect(m_analyzer, &AnalyzerPro::measurementComplete,
                 m_tdrScanDialog->panel(), &TdrScanPanel::refreshResult);
+        // NanoVNA connections never fire measurementComplete() at a real
+        // completion (MainWindow::on_measurementComplete() early-returns for
+        // NANO; the actual signal is measurementCompleteNano(), driven by
+        // the device's own "ch>" prompt) -- without this, refreshResult()
+        // was never invoked after a NanoVNA TDR scan, so the Result groupbox
+        // (peak distance/reflection type) stayed blank even though
+        // stopTDRProgress()'s own redrawTDR() call correctly populated the
+        // chart itself. Confirmed issue #30 (follow-up finding), 2026-09-05.
+        // Same "connected after MainWindow's own on_measurementCompleteNano()
+        // slot" ordering guarantee as the measurementComplete connection
+        // above -- MainWindow's constructor connects its own slot to this
+        // signal long before m_tdrScanDialog exists.
+        connect(m_analyzer, &AnalyzerPro::measurementCompleteNano,
+                m_tdrScanDialog->panel(), &TdrScanPanel::refreshResult);
         // "Use this velocity factor" (reverse-solve) -- apply it as
         // Settings > Cable's Custom velocity factor (never Preset -- a
         // reverse-solved value doesn't correspond to any named cable), and
