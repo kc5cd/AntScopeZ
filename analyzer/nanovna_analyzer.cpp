@@ -401,6 +401,8 @@ void NanovnaAnalyzer::startScanSweep(bool useBinary)
 
     setParseState(useBinary ? WAIT_NANO_SCAN_BINARY : WAIT_NANO_SCAN_ASCII);
     QString cmd = QString("scan %1 %2 %3 %4\r\n").arg(m_fqFrom).arg(m_fqTo).arg(m_dotsNumber).arg(mask);
+    if (useBinary)
+        m_lastScanCommand = cmd.toLatin1(); // see parseBinaryScan()'s comment -- not needed for the ASCII tier, which already tolerates its own echo (emitPoint()'s fqMHz<=0 guard)
     sendData(cmd);
 }
 
@@ -425,6 +427,34 @@ void NanovnaAnalyzer::parseAsciiScanLine(const QString& line)
 
 qint32 NanovnaAnalyzer::parseBinaryScan()
 {
+    // The device echoes the exact command it was just sent, as its own
+    // "\r\n"-terminated text line, before its real reply -- same behavior
+    // the ASCII scan-line path already tolerates (parseAsciiScanLine()'s
+    // 5-token parse turns the echoed "scan ..." line into a point with
+    // freq==0, which emitPoint()'s "fqMHz <= 0" guard then drops -- see its
+    // own comment). This byte-buffer binary parser had no equivalent: it
+    // read the echo's own first 4 bytes as the mask/points header, which
+    // essentially never happens to match what was actually sent, so the
+    // "malformed reply" bail-out below fired on *every* binary probe/scan.
+    // For the capability probe specifically, that bail-out demoted
+    // m_scanSupport to AsciiOnly and reset parse state mid-handshake --
+    // which then corrupted the *next* real scan's own completion: its
+    // "ch>" prompt arrived merged with this leftover garbage in one chunk
+    // and matched the WAIT_NANO_SCAN_ASCII/WAIT_NANO_SCAN_BINARY "ch>"
+    // check immediately, calling finishMeasurementSegment() before a
+    // single real data point had been parsed -- the scan then continued to
+    // stream real data on the wire (confirmed via a live debug log,
+    // 2026-09-05) that the app was no longer listening for. Root cause of
+    // issues #27 (first scan after connect shows nothing) and #41 (binary
+    // mode negotiates successfully but is never actually used).
+    if (!m_lastScanCommand.isEmpty()) {
+        if (m_incomingBuffer.size() < m_lastScanCommand.size())
+            return 0; // echo hasn't fully arrived yet -- wait for more bytes
+        if (m_incomingBuffer.startsWith(m_lastScanCommand))
+            m_incomingBuffer.remove(0, m_lastScanCommand.size());
+        m_lastScanCommand.clear(); // only ever check once, right after this request
+    }
+
     const int HEADER_SIZE = 4; // uint16 mask + uint16 points, see NanoVNA-D main.c cmd_scan()'s SCAN_MASK_BINARY branch
 
     if (m_incomingBuffer.size() < HEADER_SIZE)
@@ -614,7 +644,9 @@ void NanovnaAnalyzer::probeBinaryScanSupport()
     m_binaryExpectedBytes = -1;
 
     setParseState(WAIT_NANO_SCAN_BINARY);
-    sendData(QString("scan 1000000 2000000 2 %1\r\n").arg(mask));
+    QString cmd = QString("scan 1000000 2000000 2 %1\r\n").arg(mask);
+    m_lastScanCommand = cmd.toLatin1(); // see parseBinaryScan()'s comment
+    sendData(cmd);
 
     if (m_scanProbeTimeoutTimer == nullptr) {
         m_scanProbeTimeoutTimer = new QTimer(this);

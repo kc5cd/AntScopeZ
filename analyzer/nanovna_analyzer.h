@@ -121,6 +121,12 @@ private:
     quint16 m_binarySentMask = 0;   // what we asked for, to sanity-check the header echoed back
     quint16 m_binarySentPoints = 0;
     qint32 parseBinaryScan();       // consumes from m_incomingBuffer directly; returns bytes consumed (0 == not enough yet)
+    // The exact "scan ...\r\n" command most recently sent for a binary-mode
+    // request (probe or real) -- the device echoes it back verbatim before
+    // its real reply, and parseBinaryScan() needs to strip that echo before
+    // reading the header. Cleared once checked; see parseBinaryScan()'s own
+    // comment. Issues #27/#41.
+    QByteArray m_lastScanCommand;
 
     void startFallbackSweep();               // classic sweep/frequencies/data 0 [/data 1] sequence
     void startScanSweep(bool useBinary);      // single "scan <from> <to> <points> <mask>" fast path
