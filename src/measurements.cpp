@@ -456,9 +456,23 @@ void Measurements::on_newMeasurement(QString name, qint64 from, qint64 to, qint3
     m_measuringInProgress = true;
 }
 
+void Measurements::resetSmithTracer()
+{
+    if (m_smithTracer == NULL)
+        return;
+    // (0,0) is the Smith chart's own center -- NormRXtoSmithPoint(1,0,...)
+    // (Rnorm==1, i.e. R==m_Z0, the standard 50 ohm case) resolves to
+    // RhoReal==RhoImag==0, so this is genuinely "50 ohm", not an arbitrary
+    // origin pick.
+    m_smithTracer->topLeft->setCoords(-0.1, 0.1);
+    m_smithTracer->bottomRight->setCoords(0.1, -0.1);
+    m_smithWidget->replot();
+}
+
 void Measurements::on_newMeasurement(QString name)
 {
     m_interrupted = false;
+    resetSmithTracer(); // issue #31 -- don't carry over the last scan's/marker's cursor position
     m_liveS21PhaseHavePrev = false; // fresh phase-unwrap run for on_newSParamPoint(), see its own comment
     while(m_measurements.length() >= g_maxMeasurements)
     {
