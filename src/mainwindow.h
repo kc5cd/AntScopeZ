@@ -483,7 +483,12 @@ public slots:
     void mouseWheel_user(QWheelEvent * e);
     void mouseMove_user(QMouseEvent *);
     void mouseMove_s21(QMouseEvent *);
- //   void on_mouseWheel_s21(QWheelEvent *e);
+    // S21's wheel slot was declared/connected commented-out (never
+    // implemented) prior to this -- unlike its 7 siblings above, S21's
+    // xAxis was never part of the mutual X-range-sync group, so this only
+    // needs thumbwheel panning (panXAxisFromWheel(), mainwindow_mouse.cpp),
+    // not the Ctrl+wheel Y-zoom/sync logic those have.
+    void mouseWheel_s21(QWheelEvent *e);
     void on_singleStart_clicked();
     void on_continuousStartBtn_clicked(bool checked);
     void on_presetsAddBtn_clicked();

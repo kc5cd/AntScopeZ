@@ -805,6 +805,16 @@ void MainWindow::mouseMove_tdr(QMouseEvent * e)
     }
 }
 
+void MainWindow::mouseWheel_s21(QWheelEvent *e)
+{
+    // S21's xAxis isn't part of the swr/phase/rs/rp/rl/user mutual
+    // X-range-sync group (see setWidgetsSettings(), mainwindow.cpp) --
+    // just pan its own axis, no sync/replot bookkeeping needed like the
+    // sibling handlers have (QCPAxisRect::wheelEvent()'s own forwarded
+    // call still replots it, see panXAxisFromWheel()'s comment above).
+    panXAxisFromWheel(m_s21Widget->xAxis, e);
+}
+
 void MainWindow::mouseMove_s21(QMouseEvent * e)
 {
     // QPointF pos = e->pos();

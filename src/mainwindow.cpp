@@ -431,7 +431,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(m_tdrWidget,SIGNAL(mouseWheel(QWheelEvent*)),this, SLOT(mouseWheel_tdr(QWheelEvent*)));
 
     connect(m_s21Widget,SIGNAL(mouseMove(QMouseEvent*)),this, SLOT(mouseMove_s21(QMouseEvent*)));
- //   connect(m_s21Widget,SIGNAL(mouseWheel(QWheelEvent*)),this, SLOT(on_mouseWheel_s21(QWheelEvent*)));
+    connect(m_s21Widget,SIGNAL(mouseWheel(QWheelEvent*)),this, SLOT(mouseWheel_s21(QWheelEvent*)));
 
     connect(m_smithWidget,SIGNAL(mouseMove(QMouseEvent*)),this, SLOT(mouseMove_smith(QMouseEvent*)));
 #if USER_DEFINED_FEATURE
