@@ -30,8 +30,40 @@ extern int g_showMessageBox(QWidget* parent, QMessageBox::Icon icon,
 // mainwindow.cpp itself for the pieces left behind) -- pure code motion,
 // no behavior change. All pieces still define methods of MainWindow.
 
+// Thumbwheel/horizontal-scroll-wheel side-to-side chart panning
+// (2026-09-06, issue #59). QCPAxisRect::wheelEvent() (qcustomplot.cpp)
+// only ever reads angleDelta().y() -- a horizontal scroll wheel/
+// thumbwheel/trackpad swipe's angleDelta().x() is silently dropped there,
+// so side-to-side scrolling over a chart previously did nothing. Handled
+// at this first-party layer instead of patching the vendored
+// QCPAxisRect::wheelEvent() (see .claude/CLAUDE.md's "Windows port"
+// section on avoiding vendor edits). Each mouseWheel_*() slot below
+// already receives the same QWheelEvent via QCustomPlot::mouseWheel(),
+// emitted *before* the event is forwarded to the axis rect for its own
+// (y-only) zoom -- panning the axis synchronously here means that
+// forwarded call still ends up replotting the widget right afterward
+// (QCPAxisRect::wheelEvent() always calls QCustomPlot::replot() once
+// iRangeZoom is on, even on a zero-y-delta tick), so no separate
+// replot()/clamp call is needed here: clampAxisRange()'s rangeChanged
+// connection (mainwindow.cpp) already clamps whatever moveRange() below
+// produces, same as it does for drag-pan and scroll-zoom.
+static void panXAxisFromWheel(QCPAxis *axis, QWheelEvent *e)
+{
+    int deltaX = e->angleDelta().x();
+    if (deltaX == 0)
+        return;
+    // One wheel "step" (delta of 120 -- a tilt-click or one trackpad/
+    // thumbwheel detent) pans by 5% of the currently-visible span, so pan
+    // speed scales with zoom level the same way drag-panning already
+    // does, rather than a fixed absolute frequency/length step that would
+    // feel enormous zoomed in tight and imperceptible zoomed out.
+    const double panFraction = 0.05;
+    axis->moveRange((deltaX / 120.0) * axis->range().size() * panFraction);
+}
+
 void MainWindow::mouseWheel_swr(QWheelEvent * e)
 {   //v4_(04/12)
+    panXAxisFromWheel(m_swrWidget->xAxis, e);
     // QCustomPlot::wheelEvent() emits mouseWheel() *before* forwarding the
     // event to the axis rect that actually applies the zoom (see that
     // function's own doc comment, qcustomplot.cpp) -- reversed from 1.3.1,
@@ -226,7 +258,7 @@ void MainWindow::mouseMove_swr(QMouseEvent *e)
 
 void MainWindow::mouseWheel_phase(QWheelEvent * e)
 {
-    Q_UNUSED(e);
+    panXAxisFromWheel(m_phaseWidget->xAxis, e);
 
     // See mouseWheel_swr()'s comment -- deferred so this reads the range
     // after QCustomPlot has actually applied this tick's zoom.
@@ -312,6 +344,8 @@ void MainWindow::mouseMove_phase(QMouseEvent *e)
 
 void MainWindow::mouseWheel_rs(QWheelEvent * e)
 {
+    panXAxisFromWheel(m_rsWidget->xAxis, e);
+
     static int state = 1;
     // See mouseWheel_swr()'s comment -- deferred so this reads the range
     // after QCustomPlot has actually applied this tick's zoom.
@@ -439,6 +473,8 @@ void MainWindow::mouseMove_rs(QMouseEvent *e)
 
 void MainWindow::mouseWheel_rp(QWheelEvent *e)
 {
+    panXAxisFromWheel(m_rpWidget->xAxis, e);
+
     static quint32 state = 1;
     // See mouseWheel_swr()'s comment -- deferred so this reads the range
     // after QCustomPlot has actually applied this tick's zoom.
@@ -565,6 +601,8 @@ void MainWindow::mouseMove_rp(QMouseEvent *e)
 
 void MainWindow::mouseWheel_rl(QWheelEvent *e)
 {
+    panXAxisFromWheel(m_rlWidget->xAxis, e);
+
     // See mouseWheel_swr()'s comment -- deferred so this reads the range
     // after QCustomPlot has actually applied this tick's zoom.
     QTimer::singleShot(0, this, [this]() {
@@ -680,6 +718,8 @@ void MainWindow::mouseMove_rl(QMouseEvent *e)
 
 void MainWindow::mouseWheel_tdr(QWheelEvent* e)
 {
+    panXAxisFromWheel(m_tdrWidget->xAxis, e);
+
     static int state = 0;
     //qDebug() << "MainWindow::mouseWheel_tdr: state" << state << ", lo " << m_tdrWidget->yAxis->range().lower << ", up " << m_tdrWidget->yAxis->range().upper;
     if (e->modifiers() == Qt::ControlModifier)
@@ -820,6 +860,8 @@ void MainWindow::mouseMove_smith(QMouseEvent * e)
 
 void MainWindow::mouseWheel_user(QWheelEvent * e)
 {
+    panXAxisFromWheel(m_userWidget->xAxis, e);
+
     static int state = 1;
     // See mouseWheel_swr()'s comment -- deferred so this reads the range
     // after QCustomPlot has actually applied this tick's zoom.
