@@ -142,8 +142,28 @@ void MainWindow::on_tableWidget_measurments_cellClicked(int row, int column)
                 m_swrWidget->graph(i)->setPen(pen);
                 m_phaseWidget->graph(i)->setPen(pen);
                 m_rlWidget->graph(i)->setPen(pen);
-                m_s21Widget->graph(i)->setPen(pen);
                 m_measurements->getMeasurement(count - 2 - (i-1))->smithCurve->setPen(pen);
+
+                // S21 tab: 4 graphs per measurement (S21/S12 mag+phase, see
+                // on_newMeasurement()), each with its own hue, not 1 shared
+                // color/graph like the widgets above -- graph(i) was both
+                // the wrong graph (see s21Base below) and, via the shared
+                // `pen` copy, overwrote that trace's hue with the SWR
+                // chart's color. Distinguish active/inactive by alpha only,
+                // keeping each of the 4 traces' own hue.
+                bool s21Active = ((i-1) == row);
+                int s21Alpha = s21Active ? S21_ACTIVE_ALPHA : S21_INACTIVE_ALPHA;
+                int s21Base = (i-1)*4 + 1;
+                for (int k = 0; k < 4; ++k)
+                {
+                    QCPGraph* g = m_s21Widget->graph(s21Base + k);
+                    QPen s21Pen = g->pen();
+                    s21Pen.setWidth(S21_GRAPH_PEN_WIDTH);
+                    QColor c = s21Pen.color();
+                    c.setAlpha(s21Alpha);
+                    s21Pen.setColor(c);
+                    g->setPen(s21Pen);
+                }
 
                 for (int ii=0; ii<3; ii++) {
                     pen = m_rpWidget->graph(j+ii)->pen();

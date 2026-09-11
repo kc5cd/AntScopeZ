@@ -478,10 +478,27 @@ void Measurements::on_newMeasurement(QString name)
         m_swrWidget->graph()->setPen(pen);
         m_phaseWidget->graph()->setPen(pen);
         m_rlWidget->graph()->setPen(pen);
-        m_s21Widget->graph()->setPen(pen);
         m_smithWidget->graph()->setPen(pen);
         m_measurements.at(m_measurements.length()-2).smithCurve->setPen(pen);
-    }    
+
+        // S21 tab has 4 graphs per measurement (S21/S12 mag+phase, added
+        // below), not 1 like the widgets above -- graph() (no index) only
+        // ever reached the last of the previous measurement's 4 traces,
+        // leaving the other 3 stuck at active width/brightness. Demote all
+        // 4, keeping each trace's own hue and dropping it to the inactive
+        // alpha (see S21_INACTIVE_ALPHA's comment in measurements.h).
+        int prevS21Count = m_s21Widget->graphCount();
+        for (int i = prevS21Count - 4; i < prevS21Count; ++i)
+        {
+            QCPGraph* g = m_s21Widget->graph(i);
+            QPen s21DemotePen = g->pen();
+            s21DemotePen.setWidth(S21_GRAPH_PEN_WIDTH);
+            QColor c = s21DemotePen.color();
+            c.setAlpha(S21_INACTIVE_ALPHA);
+            s21DemotePen.setColor(c);
+            g->setPen(s21DemotePen);
+        }
+    }
     m_swrWidget->addGraph();
     m_swrWidget->graph()->setAntialiasedFill(false);
     m_swrWidget->graph()->setName(name);
@@ -583,7 +600,7 @@ void Measurements::on_newMeasurement(QString name)
     m_rpWidget->graph(rsGraphCount-1)->setPen(zpen);
 
     QPen s21Pen;
-    s21Pen.setWidth(ACTIVE_GRAPH_PEN_WIDTH);
+    s21Pen.setWidth(S21_GRAPH_PEN_WIDTH);
     // S21 dashed, S12 solid -- distinct by line style as well as color.
     // For a reciprocal network (S21==S12, the normal case for passive
     // components: cables, filters, attenuators, not just a quirk of one
@@ -598,8 +615,10 @@ void Measurements::on_newMeasurement(QString name)
     // gaps between dashes, since directly beneath a gap is the same
     // curve at the same position. Force a consistent, semi-transparent
     // alpha on all 4 traces here so this doesn't depend on which
-    // getColor() index a given trace happens to land on.
-    auto s21Color = [](int idx) { QColor c = getColor(idx); c.setAlpha(150); return c; };
+    // getColor() index a given trace happens to land on -- S21_ACTIVE_ALPHA
+    // (see measurements.h) is that alpha for the just-added, active
+    // measurement; still < 255 for the same reason.
+    auto s21Color = [](int idx) { QColor c = getColor(idx); c.setAlpha(S21_ACTIVE_ALPHA); return c; };
     s21Pen.setStyle(Qt::DashLine);
     s21Pen.setColor(s21Color(m_currentIndex));
     m_s21Widget->graph(s21GraphCount-4)->setPen(s21Pen); // S21 dB

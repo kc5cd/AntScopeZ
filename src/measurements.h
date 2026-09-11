@@ -67,6 +67,18 @@ enum class TdrWindow { Rectangular, Hamming, Hann, Blackman, Kaiser };
 #define ACTIVE_GRAPH_PEN_WIDTH 5
 #define INACTIVE_GRAPH_PEN_WIDTH 2
 
+// S21 tab distinguishes active/inactive measurements by brightness, not
+// width -- it already overlays 4 traces per measurement (S21/S12 mag+phase,
+// see on_newMeasurement()), so ACTIVE_GRAPH_PEN_WIDTH's width-5 lines made
+// the tab look excessively thick/cluttered once more than one measurement
+// was present. Same width for both states; only alpha changes. Kept below
+// 255 even for "active" -- getColor()'s traces are already semi-transparent
+// by design so a reciprocal network's identical S21/S12 traces don't fully
+// occlude each other (see the comment above s21Color() in on_newMeasurement()).
+#define S21_GRAPH_PEN_WIDTH 2
+#define S21_ACTIVE_ALPHA 220
+#define S21_INACTIVE_ALPHA 90
+
 typedef std::complex <double> Complex;
 
 class Measurements : public QObject
